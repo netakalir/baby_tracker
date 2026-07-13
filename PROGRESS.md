@@ -42,7 +42,12 @@
 - RLS מופעל על כל הטבלאות עם policies נכונות
 - GRANTs לתפקיד `authenticated` על כל הטבלאות (אומת ב-SQL)
 - Realtime publication פעיל על כל הטבלאות (אומת ב-SQL)
-- 2 migrations בריפו: `20260701000000_initial_schema.sql`, `20260701000001_grants_and_realtime.sql`
+- 6 migrations בריפו:
+  - `20260701000000_initial_schema.sql` — טבלאות + RLS + policies ראשוניים
+  - `20260701000001_grants_and_realtime.sql` — GRANTs מפורשים + Realtime publication
+  - `20260712000000_fix_family_members_rls_recursion.sql` — תיקון רקורסיה אינסופית ב-RLS (`42P17`) עם helper `auth_user_family_ids()` (SECURITY DEFINER)
+  - `20260712000001` + `20260713000000_families_insert_policy.sql` — פיצול policy של `families` כדי לאפשר יצירת משפחה (INSERT למחובר, קריאה/עריכה לחברים בלבד)
+  - `20260713000001_create_family_rpc.sql` — RPC אטומי `create_family()` (משפחה + חברות יחד) + ניקוי משפחות יתומות
 
 **פרויקט React:**
 - React + TypeScript + Vite מוקם
@@ -52,23 +57,31 @@
 - ספריית UI בסיסית ב-`src/components/ui/`: `Button`, `Card`, `Input`, `Label`, `Banner`, `FormError`, `LoadingScreen`, `ErrorScreen`
 - תשתית משותפת: `lib/queryClient.ts`, `lib/errorMessages.ts`, `lib/supabase.ts`, `types/database.ts`
 
-### שלב 4: משימה 2 - Auth + Onboarding ✅ (בקוד, טרם commit)
-בוצע בענף `AuthPage-login`, עדיין לא committed ולא merged:
+### שלב 4: משימה 2 - Auth + Onboarding ✅ (committed + נדחף + אומת מקצה לקצה)
+בוצע ונדחף בענף `AuthPage-login` (טרם merged ל-`main`):
 - **הרשמה/התחברות באימייל + סיסמה** (לא "אימייל בלבד" - כולל סיסמה, שכחתי סיסמה, איפוס סיסמה, אימות אימייל)
 - מסכים: `AuthPage`, `ForgotPasswordScreen`, `ResetPasswordScreen`, `VerifyEmailScreen`
 - Onboarding: `CreateOrJoinScreen`, `CreateFamilyScreen`, `JoinFamilyScreen`, `AddChildScreen`
 - זרימת קישור הזמנה (join by token)
 - Route guards לפי סטטוס onboarding (`RequireAuth`, `RequireVerifiedEmail`, `RequireOnboardingStatus`, `RedirectIfSignedIn`)
 - `AuthProvider` + hooks (`useAuth`, `useOnboardingStatus`)
-- `TodayScreen` = placeholder ריק (מציג שם ילד + אימייל בלבד)
+- `TodayScreen` = placeholder (שם ילד + אימייל + **כפתור התנתקות**)
 
-**נותר לסגור במשימה זו:** commit/merge, בדיקות Playwright (טרם נכתבו), אימות ידני של הזרימה ב-preview.
+**באגים שהתגלו ותוקנו באימות** (ראה סעיף migrations):
+1. רקורסיה אינסופית ב-RLS → כל קריאה 500, ההתחברות נתקעה. תוקן עם `auth_user_family_ids()`.
+2. INSERT ל-`families` נחסם (בעיית ביצה-ותרנגולת). תוקן בפיצול policy.
+3. `.select()` אחרי יצירת משפחה נחסם → RPC אטומי `create_family()`.
+4. אין דרך להתנתק מהמסך הראשי → נוסף כפתור "התנתקות" ב-`TodayScreen` (מנקה גם את מטמון ה-queries).
+
+**Git (ענף `AuthPage-login`):** `feat(db)` → `feat(auth)` → `docs` → `feat(auth): sign-out button`.
+
+**נותר לסגור במשימה זו:** merge ל-`main`, בדיקות Playwright (טרם נכתבו), בדיקת בידוד בין שתי משפחות (דורש משתמש שני).
 
 ---
 
 ## מה בתהליך כרגע 🔄
 
-אין משימה פעילה כרגע. הצעד הבא: סיום וסגירת משימה 2 (בדיקות + commit) או מעבר למשימה 3 (מסך "היום").
+אין משימה פעילה. הצעד הבא: משימה 3 (מסך "היום" - שעון + כפתורי הזנה), או השלמת הסגירה של משימה 2 (merge + בדיקת בידוד משפחות).
 
 ---
 
@@ -79,7 +92,7 @@
 | # | משימה | תלוי ב |
 |---|---|---|
 | 1 | ~~תשתית (scaffold + טבלאות)~~ | ~~-~~ |
-| 2 | ~~Auth + Onboarding~~ (בקוד, טרם commit + טרם בדיקות) | 1 |
+| 2 | ~~Auth + Onboarding~~ (committed + נדחף + אומת; נותר merge + בדיקת בידוד) | 1 |
 | 3 | מסך "היום" - שעון + כפתורי הזנה | 2 |
 | 4 | טיימר שינה (start/stop) | 3 |
 | 5 | בנר צפי שינה/האכלה | 3, 4 |
