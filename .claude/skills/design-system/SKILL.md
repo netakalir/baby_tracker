@@ -21,6 +21,30 @@ Professional and distinctive - never generic or "default component library" look
 - Typography: one consistent type scale across the app (a small number of font sizes/weights, reused everywhere - not ad-hoc sizing per screen).
 - Spacing: use a consistent spacing scale (e.g. a fixed set of spacing values) rather than arbitrary pixel values chosen per component.
 
+## Design Tokens (defined, do not redefine ad-hoc)
+Implemented as Tailwind v4 `@theme` CSS variables in `src/index.css`. Reference these tokens (via Tailwind utility classes) rather than hardcoding hex/px values in components.
+
+**Layout direction:** the app UI is Hebrew, RTL. The root `<html>` has `dir="rtl" lang="he"`. Do not build components assuming LTR flow.
+
+**Color**
+- Brand (primary actions, links, focus rings): `brand-50/100/300/500/600/700` - a muted indigo-violet (`#5b5bd6` at 500). `600` is the hover/active shade.
+- Neutrals (warm gray, not pure gray): `neutral-0/50/100/200/400/600/800/900` - backgrounds, borders, body/secondary text.
+- Semantic: `error-50` (background)/`error-500` (text/border) for validation and blocking errors; `success-500` for confirmations.
+- Event-type colors (sleep/feeding/diaper/mood) are **not yet defined** - add them here, once, when the Today screen's clock/buttons are built. Do not invent one ad-hoc before then.
+
+**Typography**
+- Font: system font stack (`--font-sans`) - no webfont download, keeps the app fast at 3am.
+- Scale: `text-xs` (0.75rem) → `text-sm` (0.875rem, default body) → `text-base` (1rem) → `text-lg` (1.125rem) → `text-xl` (1.375rem, section headers) → `text-2xl` (1.75rem, screen titles). Do not introduce sizes outside this scale.
+
+**Spacing**
+- Use Tailwind's default spacing scale (`p-4`, `gap-2`, etc.) consistently - never an arbitrary pixel value (`p-[13px]`).
+
+**Radius**
+- `radius-sm` (0.375rem) - inputs, small controls. `radius-md` (0.625rem) - buttons. `radius-lg` (1rem) - cards/panels.
+
+**Motion**
+- `duration-fast` (150ms) - button/tap feedback. `duration-base` (200ms) - the clock's single entrance animation. Never exceed `duration-base`.
+
 ## Component Conventions
 - Primary logging buttons (🍼 😴 🧷 😊) must be large, high-contrast, and visually identical in style (size, shape, shadow/elevation) across all screens that show them.
 - Every screen/tab in the app must use the same header style, the same card style, and the same spacing rhythm - a user should never feel like they "left the app" when moving between tabs.
