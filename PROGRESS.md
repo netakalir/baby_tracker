@@ -48,6 +48,7 @@
   - `20260712000000_fix_family_members_rls_recursion.sql` — תיקון רקורסיה אינסופית ב-RLS (`42P17`) עם helper `auth_user_family_ids()` (SECURITY DEFINER)
   - `20260712000001` + `20260713000000_families_insert_policy.sql` — פיצול policy של `families` כדי לאפשר יצירת משפחה (INSERT למחובר, קריאה/עריכה לחברים בלבד)
   - `20260713000001_create_family_rpc.sql` — RPC אטומי `create_family()` (משפחה + חברות יחד) + ניקוי משפחות יתומות
+  - `20260716000000_family_invites_claim_policy.sql` — **תיקון באג:** policy ל-UPDATE על `family_invites` שמאפשר להורה שני לתבוע (claim) הזמנה. בלעדיו כל ניסיון הצטרפות נכשל ב-"ההזמנה כבר נוצלה" (RLS חסם את ה-UPDATE → 0 שורות)
 
 **פרויקט React:**
 - React + TypeScript + Vite מוקם
@@ -73,15 +74,22 @@
 3. `.select()` אחרי יצירת משפחה נחסם → RPC אטומי `create_family()`.
 4. אין דרך להתנתק מהמסך הראשי → נוסף כפתור "התנתקות" ב-`TodayScreen` (מנקה גם את מטמון ה-queries).
 
-**Git (ענף `AuthPage-login`):** `feat(db)` → `feat(auth)` → `docs` → `feat(auth): sign-out button`.
+**Git (ענף `AuthPage-login`):** `feat(db)` → `feat(auth)` → `docs` → `feat(auth): sign-out button` → `fix(db): invite claim policy` → `test(e2e): auth/isolation/sharing`.
 
-**נותר לסגור במשימה זו:** merge ל-`main`, בדיקות Playwright (טרם נכתבו), בדיקת בידוד בין שתי משפחות (דורש משתמש שני).
+### סגירת משימה 2 ✅ (בדיקות E2E + תיקון באג + merge)
+- **תשתית בדיקות Playwright** הוקמה מול פרויקט Supabase המאורח: `playwright.config.ts`, `tests/support/` (טעינת env, admin client, fixtures שיוצרים משתמשים מאומתים-מראש/משפחות/הזמנות ומנקים אחריהם), `tests/e2e/`.
+- **5 בדיקות E2E — כולן עוברות:**
+  - `auth.spec.ts` — התחברות → onboarding מלא → מסך היום; חבר קיים נוחת ישר ב-Today; שגיאת התחברות ידידותית.
+  - `family-isolation.spec.ts` — **גבול RLS:** משתמש ממשפחה B לא רואה ילד של משפחה A, גם ב-UI וגם ברמת ה-API עם client מאומת אמיתי.
+  - `family-sharing.spec.ts` — הורה שני מצטרף דרך הזמנה ורואה את הילד המשותף.
+- **באג אמיתי שהתגלה ותוקן:** ל-`family_invites` לא היה policy ל-UPDATE, ולכן זרימת ההצטרפות של הורה שני (ליבת שיתוף המשפחה) מעולם לא עבדה באמת. תוקן ב-migration `20260716000000` שנדחף ל-DB המאורח (`supabase db push`).
+- **הבדיקות רצות מול פרויקט מאורח** (אין Docker/runtime מקומי במכונה). ה-`service_role`/secret key נמצא ב-`.env.test` בלבד (מוגן ב-`.gitignore`), לשימוש הבדיקות בלבד, ובוטל אחרי הריצה.
 
 ---
 
 ## מה בתהליך כרגע 🔄
 
-אין משימה פעילה. הצעד הבא: משימה 3 (מסך "היום" - שעון + כפתורי הזנה), או השלמת הסגירה של משימה 2 (merge + בדיקת בידוד משפחות).
+אין משימה פעילה. משימה 2 נסגרה במלואה (auth + onboarding + בדיקות E2E + תיקון באג ההזמנה + merge ל-`main`). הצעד הבא: **משימה 3** — מסך "היום" (שעון 24 שעות + כפתורי הזנה).
 
 ---
 
@@ -92,7 +100,7 @@
 | # | משימה | תלוי ב |
 |---|---|---|
 | 1 | ~~תשתית (scaffold + טבלאות)~~ | ~~-~~ |
-| 2 | ~~Auth + Onboarding~~ (committed + נדחף + אומת; נותר merge + בדיקת בידוד) | 1 |
+| 2 | ~~Auth + Onboarding~~ (הושלם: בדיקות E2E עוברות + תיקון באג הזמנה + merged ל-`main`) | 1 |
 | 3 | מסך "היום" - שעון + כפתורי הזנה | 2 |
 | 4 | טיימר שינה (start/stop) | 3 |
 | 5 | בנר צפי שינה/האכלה | 3, 4 |
