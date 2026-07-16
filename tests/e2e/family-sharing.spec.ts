@@ -49,4 +49,45 @@ test.describe('family sharing', () => {
 
     await clientB.auth.signOut()
   })
+
+  test('an expired invite cannot be claimed, even directly via the API', async ({ factory }) => {
+    const parentA = await factory.createUser()
+    const family = await factory.seedFamilyWithChild(parentA, { childName: `פג-${Date.now()}` })
+    const expiredToken = await factory.seedInvite(parentA, family.familyId, {
+      expiresAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    })
+
+    // An attacker who obtained an expired token, signed in, bypassing the
+    // client-side expiry check and claiming the invite straight through the API.
+    const attacker = await factory.createUser()
+    const client = createClient(testEnv.supabaseUrl, testEnv.supabaseAnonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+    const { error: signInError } = await client.auth.signInWithPassword({
+      email: attacker.email,
+      password: attacker.password,
+    })
+    expect(signInError).toBeNull()
+
+    // Reading an invite by token is permitted, which yields its id.
+    const { data: invite, error: readError } = await client
+      .from('family_invites')
+      .select('id')
+      .eq('token', expiredToken)
+      .single<{ id: string }>()
+    expect(readError).toBeNull()
+
+    // The claim must fail at the database: the RLS policy requires the invite
+    // to be both unused AND unexpired, so zero rows are updated.
+    const { data: claimed, error: claimError } = await client
+      .from('family_invites')
+      .update({ used_at: new Date().toISOString(), used_by: attacker.id })
+      .eq('id', invite.id)
+      .is('used_at', null)
+      .select()
+    expect(claimError).toBeNull()
+    expect(claimed).toEqual([])
+
+    await client.auth.signOut()
+  })
 })

@@ -34,8 +34,12 @@ export interface TestFactory {
    * rather than bypassing RLS with the service role.
    */
   seedFamilyWithChild(user: TestUser, options?: SeedFamilyOptions): Promise<SeededFamily>
-  /** Creates a valid, unused invite for a family (acting as `user`) and returns its token. */
-  seedInvite(user: TestUser, familyId: string): Promise<string>
+  /**
+   * Creates an unused invite for a family (acting as `user`) and returns its
+   * token. Defaults to expiring in 7 days; pass `expiresAt` to override (e.g. a
+   * past timestamp to seed an already-expired invite).
+   */
+  seedInvite(user: TestUser, familyId: string, options?: { expiresAt?: string }): Promise<string>
 }
 
 /**
@@ -108,9 +112,10 @@ export const test = base.extend<{ factory: TestFactory }>({
         return { familyId: familyId as string, childId: child.id, childName: child.name }
       },
 
-      async seedInvite(user, familyId) {
+      async seedInvite(user, familyId, options) {
         const client = await clientFor(user)
-        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        const expiresAt =
+          options?.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
         const { data, error } = await client
           .from('family_invites')
           .insert({ family_id: familyId, invited_by: user.id, expires_at: expiresAt })
