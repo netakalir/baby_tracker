@@ -5,10 +5,17 @@ node_modules/
 dist/
 build/
 
+# Playwright E2E artifacts
+test-results/
+playwright-report/
+.playwright/
+
 # Environment variables (never commit secrets)
 .env
 .env.local
 .env.*.local
+# E2E test env - holds the Supabase service_role key, must never be committed
+.env.test
 
 # Local MCP config (contains API tokens)
 .mcp.json
