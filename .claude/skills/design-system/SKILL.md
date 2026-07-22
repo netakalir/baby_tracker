@@ -30,7 +30,12 @@ Implemented as Tailwind v4 `@theme` CSS variables in `src/index.css`. Reference 
 - Brand (primary actions, links, focus rings): `brand-50/100/300/500/600/700` - a muted indigo-violet (`#5b5bd6` at 500). `600` is the hover/active shade.
 - Neutrals (warm gray, not pure gray): `neutral-0/50/100/200/400/600/800/900` - backgrounds, borders, body/secondary text.
 - Semantic: `error-50` (background)/`error-500` (text/border) for validation and blocking errors; `success-500` for confirmations.
-- Event-type colors (sleep/feeding/diaper/mood) are **not yet defined** - add them here, once, when the Today screen's clock/buttons are built. Do not invent one ad-hoc before then.
+- Event-type colors (defined once with the Today screen; one consistent color per type, reused everywhere - clock arcs, quick-log buttons, future charts/legends - never reused across types):
+  - `sleep-50/300/500` - indigo (`#6366f1` at 500): night/rest.
+  - `feeding-50/300/500` - orange (`#f97316` at 500): milk/warmth.
+  - `diaper-50/300/500` - cyan (`#06b6d4` at 500): clean, distinct from the warm tones.
+  - `mood-50/300/500` - fuchsia (`#d946ef` at 500): expressive, distinct from feeding.
+  - Per type: `50` = tinted button surface, `300` = lighter clock-gradient stop, `500` = solid accent. Reference the tokens (Tailwind classes or `var(--color-<type>-<step>)`), never hardcode the hex.
 
 **Typography**
 - Font: system font stack (`--font-sans`) - no webfont download, keeps the app fast at 3am.

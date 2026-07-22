@@ -25,15 +25,20 @@
   --color-success-500: #16a34a;
 
   /* Event-type colors (one per type, reused everywhere: buttons, clock, charts).
-     Defined here once, when the Today screen buttons are built (see design-system
-     skill). `50` is the tinted button surface, `500` the solid accent. */
+     Defined here once, when the Today screen is built (see design-system skill).
+     `50` is the tinted button surface, `300` the lighter clock-gradient stop,
+     `500` the solid accent. Never reuse a color across event types. */
   --color-sleep-50: #eef2ff;
+  --color-sleep-300: #a5b4fc;
   --color-sleep-500: #6366f1;
   --color-feeding-50: #fff7ed;
+  --color-feeding-300: #fdba74;
   --color-feeding-500: #f97316;
   --color-diaper-50: #ecfeff;
+  --color-diaper-300: #67e8f9;
   --color-diaper-500: #06b6d4;
   --color-mood-50: #fdf4ff;
+  --color-mood-300: #f0abfc;
   --color-mood-500: #d946ef;
 
   /* Typography */

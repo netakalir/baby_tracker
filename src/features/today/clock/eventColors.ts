@@ -4,33 +4,26 @@ import type { EventType } from '../../../types/database'
  * Per-event-type color definitions for the Today-screen clock.
  *
  * The design-system skill mandates one consistent color/gradient per event type,
- * reused everywhere (clock, buttons, charts, legends). Those tokens are declared
- * "not yet defined - add them once when the Today screen is built".
- *
- * They are defined here (scoped to the clock) rather than in `src/index.css`
- * `@theme` only because this component is built on an isolated branch that must
- * not edit shared files. When the data layer / logging buttons land, these values
- * should be promoted verbatim into `index.css` as `--color-event-*` tokens so the
- * whole app references a single source of truth.
+ * reused everywhere (clock, buttons, charts, legends). The canonical values live
+ * once in `src/index.css` `@theme` as `--color-<type>-{50,300,500}` tokens; this
+ * module references those variables (not raw hex) so the clock, the logging
+ * buttons, and future charts all draw from a single source of truth. `base` is
+ * the solid `500` accent; `light` is the `300` gradient stop.
  */
 export interface EventColor {
-  /** Solid stroke/fill base color. */
+  /** Solid stroke/fill base color (the `500` token). */
   readonly base: string
-  /** Lighter gradient stop, used for the arc's gradient fill. */
+  /** Lighter gradient stop for the arc fill (the `300` token). */
   readonly light: string
   /** Human-readable Hebrew label for the event type (aria + legend). */
   readonly label: string
 }
 
 export const EVENT_COLORS: Readonly<Record<EventType, EventColor>> = {
-  // Sleep - deep indigo, evokes night/rest, distinct from the brand violet.
-  sleep: { base: '#4338ca', light: '#818cf8', label: 'שינה' },
-  // Feeding - warm amber, evokes milk/warmth.
-  feeding: { base: '#d97706', light: '#fbbf24', label: 'האכלה' },
-  // Diaper - teal, clean and distinct from the warm tones.
-  diaper: { base: '#0d9488', light: '#5eead4', label: 'החתלה' },
-  // Mood - rose, expressive without competing with feeding's amber.
-  mood: { base: '#e11d48', light: '#fb7185', label: 'מצב רוח' },
+  sleep: { base: 'var(--color-sleep-500)', light: 'var(--color-sleep-300)', label: 'שינה' },
+  feeding: { base: 'var(--color-feeding-500)', light: 'var(--color-feeding-300)', label: 'האכלה' },
+  diaper: { base: 'var(--color-diaper-500)', light: 'var(--color-diaper-300)', label: 'החתלה' },
+  mood: { base: 'var(--color-mood-500)', light: 'var(--color-mood-300)', label: 'מצב רוח' },
 } as const
 
 export function eventColor(type: EventType): EventColor {

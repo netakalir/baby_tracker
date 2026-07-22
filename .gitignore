@@ -38,3 +38,6 @@ dist-ssr
 
 #Folder
 Documentation/
+
+# Agent worktrees (isolated subagent branches live here)
+.claude/worktrees/
