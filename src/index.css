@@ -24,6 +24,18 @@
   --color-error-50: #fef2f2;
   --color-success-500: #16a34a;
 
+  /* Event-type colors (one per type, reused everywhere: buttons, clock, charts).
+     Defined here once, when the Today screen buttons are built (see design-system
+     skill). `50` is the tinted button surface, `500` the solid accent. */
+  --color-sleep-50: #eef2ff;
+  --color-sleep-500: #6366f1;
+  --color-feeding-50: #fff7ed;
+  --color-feeding-500: #f97316;
+  --color-diaper-50: #ecfeff;
+  --color-diaper-500: #06b6d4;
+  --color-mood-50: #fdf4ff;
+  --color-mood-500: #d946ef;
+
   /* Typography */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Assistant", "Arial Hebrew", Roboto, sans-serif;
   --text-xs: 0.75rem;
