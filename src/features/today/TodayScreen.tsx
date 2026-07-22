@@ -6,6 +6,7 @@ import { LoadingScreen } from '../../components/ui/LoadingScreen'
 import { signOut } from '../auth/api'
 import { useAuth } from '../auth/useAuth'
 import { useOnboardingStatus } from '../onboarding/useOnboardingStatus'
+import { QuickLogButtons } from './QuickLogButtons'
 
 export function TodayScreen() {
   const { user } = useAuth()
@@ -24,21 +25,25 @@ export function TodayScreen() {
 
   if (!onboardingState) return <LoadingScreen />
 
+  const child = onboardingState.firstChild
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
-      <Card className="max-w-sm text-center">
-        <h1 className="mb-2 text-2xl font-semibold text-neutral-900">
-          {onboardingState.firstChild?.name}
-        </h1>
-        <p className="mb-6 text-sm text-neutral-600">מחובר/ת כ-{user?.email}</p>
-        <Button
-          variant="ghost"
-          onClick={() => signOutMutation.mutate()}
-          isLoading={signOutMutation.isPending}
-        >
-          התנתקות
-        </Button>
-      </Card>
+    <div className="min-h-screen bg-neutral-50 px-4 pb-40 pt-8">
+      <div className="mx-auto flex max-w-sm flex-col items-center">
+        <Card className="max-w-sm text-center">
+          <h1 className="mb-2 text-2xl font-semibold text-neutral-900">{child?.name}</h1>
+          <p className="mb-6 text-sm text-neutral-600">מחובר/ת כ-{user?.email}</p>
+          <Button
+            variant="ghost"
+            onClick={() => signOutMutation.mutate()}
+            isLoading={signOutMutation.isPending}
+          >
+            התנתקות
+          </Button>
+        </Card>
+      </div>
+
+      {child && <QuickLogButtons childId={child.id} />}
     </div>
   )
 }
