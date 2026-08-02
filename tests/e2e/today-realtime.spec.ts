@@ -20,21 +20,23 @@ test.describe('Today screen - realtime sync between parents', () => {
     await expect(page).toHaveURL(/\/today$/)
     await expect(page.getByRole('heading', { name: family.childName })).toBeVisible()
 
-    const feedingMarkerForB = page.getByRole('img', { name: /האכלה בשעה/ })
-    await expect(feedingMarkerForB).toBeHidden()
+    // Diaper is a one-tap point event, so it isolates the realtime path under
+    // test from feeding/sleep timer semantics (which need a start AND a stop).
+    const diaperMarkerForB = page.getByRole('img', { name: /החתלה בשעה/ })
+    await expect(diaperMarkerForB).toBeHidden()
 
-    // User A, on a separate device, logs a feeding with one tap.
+    // User A, on a separate device, logs a diaper change with one tap.
     const contextA = await browser.newContext()
     const pageA = await contextA.newPage()
     try {
       await signIn(pageA, userA)
       await expect(pageA).toHaveURL(/\/today$/)
-      await pageA.getByRole('button', { name: 'רישום האכלה' }).click()
-      await expect(pageA.getByRole('status')).toHaveText('נרשמה האכלה')
+      await pageA.getByRole('button', { name: 'רישום החתלה' }).click()
+      await expect(pageA.getByRole('status')).toHaveText('נרשם החתלה')
 
       // Without any reload, the realtime channel pushes A's insert and B's clock
-      // shows the new feeding marker.
-      await expect(feedingMarkerForB).toBeVisible()
+      // shows the new diaper marker.
+      await expect(diaperMarkerForB).toBeVisible()
     } finally {
       await contextA.close()
     }

@@ -95,10 +95,16 @@ test.describe('Today screen - start/stop timers', () => {
     const user = await factory.createUser()
     const family = await factory.seedFamilyWithChild(user, { childName: 'דניאל' })
 
-    // A feeding started earlier today and still running (no end_time).
+    // A feeding that is still running (no end_time). Its start must be both
+    // within today (so the day-scoped query returns it) AND in the past (so the
+    // "start..now" arc has positive length). We anchor 30 min before now but
+    // never earlier than just after today's midnight, which keeps both true at
+    // any time of day - including the minutes right after midnight, where a
+    // fixed early-morning hour would still sit in the future.
     const dayStart = new Date(israelDayBounds().startIso).getTime()
+    const feedingStart = Math.max(dayStart + 1_000, Date.now() - 30 * 60_000)
     await factory.seedEvents(user, family.childId, [
-      { type: 'feeding', start_time: new Date(dayStart + 120 * 60_000).toISOString(), end_time: null },
+      { type: 'feeding', start_time: new Date(feedingStart).toISOString(), end_time: null },
     ])
 
     await signIn(page, user)
