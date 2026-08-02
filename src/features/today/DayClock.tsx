@@ -1,9 +1,10 @@
-import { useId, useMemo } from 'react'
-import type { Event } from '../../types/database'
-import { clipEventToDay, MINUTES_IN_DAY, type DaySegment } from './clock/dayWindow'
+import { useId, useMemo, useState, type KeyboardEvent } from 'react'
+import type { Event, EventType } from '../../types/database'
+import { clipEventToDay, type DaySegment } from './clock/dayWindow'
 import { eventColor } from './clock/eventColors'
-import { minutesToAngle, pointOnCircle, ringArcPath, type Point } from './clock/geometry'
-import { formatIsraelTime } from './clock/timeFormat'
+import { minutesToAngle, pointOnCircle, strokeArcPath, type Point } from './clock/geometry'
+import { RING_ORDER, RING_STROKE, RINGS, ringRadius } from './clock/rings'
+import { formatDuration, formatIsraelTime } from './clock/timeFormat'
 
 interface DayClockProps {
   /** Events for the displayed day (from `src/types/database.ts`). */
@@ -14,67 +15,175 @@ interface DayClockProps {
   onArcClick?: (event: Event) => void
 }
 
-/** A drawable event: the source event plus its clipped in-day segment. */
-interface ClockSegment {
-  readonly event: Event
-  readonly segment: DaySegment
-}
-
 // --- Dimensions (viewBox units; the SVG scales responsively via CSS). ---
-const VIEWBOX_SIZE = 240
+const VIEWBOX_SIZE = 300
 const CENTER: Point = { x: VIEWBOX_SIZE / 2, y: VIEWBOX_SIZE / 2 }
-const OUTER_RADIUS = 104
-const INNER_RADIUS = 74
-const TRACK_STROKE = OUTER_RADIUS - INNER_RADIUS
-const TRACK_RADIUS = (OUTER_RADIUS + INNER_RADIUS) / 2
-const POINT_MARKER_RADIUS = 6
-const TICK_INNER = OUTER_RADIUS + 4
-const TICK_OUTER = OUTER_RADIUS + 9
+/**
+ * Breathing room around the dial. The outermost halo (radius 158 from a centre
+ * at 150) and the hour labels both extend past the 0..300 box; without this
+ * margin the viewBox clips them - the left "18:00" label lost its leading "1".
+ */
+const VIEW_MARGIN = 20
+const VIEWBOX = `${-VIEW_MARGIN} ${-VIEW_MARGIN} ${VIEWBOX_SIZE + VIEW_MARGIN * 2} ${VIEWBOX_SIZE + VIEW_MARGIN * 2}`
+/** The white dial face the rings sit on. */
+const FACE_RADIUS = 120
+/** Hour ticks straddle the face edge; hour labels sit outside it. */
+const TICK_OUTER_RADIUS = 126
+const TICK_MINOR_LENGTH = 6
+const TICK_MAJOR_LENGTH = 12
+const LABEL_RADIUS = 139
+/** Soft concentric halos behind the face - depth only, no motion. */
+const HALO_RADII = [132, 144, 143 + 15] as const
+/** Marker for an instantaneous event, drawn centred on its ring. */
+const POINT_DOT_RADIUS = 5.5
 
 const EMPTY_STATE_TEXT = 'עדיין אין נתונים היום - לחץ על אחד הכפתורים כדי להתחיל'
 
-/** Hour labels drawn around the dial. Every 6 hours keeps it uncluttered. */
-const HOUR_TICKS = [0, 6, 12, 18] as const
+/**
+ * Event types logged as a start/stop timer. While such an event is still running
+ * (`end_time === null`) its arc is drawn up to "now" instead of collapsing to a
+ * dot, so an in-progress sleep is visible on the dial. Every other type is a
+ * single instantaneous tap and is genuinely a point in time.
+ */
+const TIMER_TYPES: ReadonlySet<EventType> = new Set<EventType>(['sleep', 'feeding'])
 
-function toClockSegments(events: Event[], date: Date): ClockSegment[] {
-  return events
-    .map((event) => {
-      const segment = clipEventToDay(event.start_time, event.end_time, date)
-      return segment ? { event, segment } : null
-    })
-    .filter((entry): entry is ClockSegment => entry !== null)
+interface Drawable {
+  readonly event: Event
+  readonly segment: DaySegment
+  /** True while a timer event is still running (drawn with an open end cap). */
+  readonly isOngoing: boolean
 }
 
-function ariaLabelFor(event: Event, segment: DaySegment): string {
+interface EventDescription {
+  /** The event-type name (e.g. "שינה"). */
+  readonly label: string
+  /** Short detail lines, kept narrow to fit inside the dial's hollow centre. */
+  readonly lines: readonly string[]
+}
+
+/** Structured, human-readable summary of an event: its type and time details. */
+function describeEvent({ event, segment, isOngoing }: Drawable): EventDescription {
   const { label } = eventColor(event.type)
+  if (isOngoing) {
+    const elapsed = formatDuration(event.start_time, new Date().toISOString())
+    return { label, lines: [`מ-${formatIsraelTime(event.start_time)}`, `בתהליך · ${elapsed}`] }
+  }
+  if (segment.isPointInTime || event.end_time === null) {
+    return { label, lines: [`בשעה ${formatIsraelTime(event.start_time)}`] }
+  }
+  const duration = formatDuration(event.start_time, event.end_time)
+  const range = `${formatIsraelTime(event.start_time)}–${formatIsraelTime(event.end_time)}`
+  return {
+    // The time range is wrapped in an LTR isolate (LRI…PDI) so "22:40–06:10"
+    // keeps start-before-end order inside the RTL layout instead of flipping.
+    label,
+    lines: [`⁦${range}⁩`, duration],
+  }
+}
+
+/**
+ * A natural-language label for screen readers - a full sentence, unlike the
+ * compact centre readout, so it reads clearly aloud (e.g. "שינה מ-22:40 עד
+ * 06:10, משך 7ש׳ 30ד׳" rather than "22:40–06:10 · 7ש׳ 30ד׳").
+ */
+function ariaLabelFor({ event, segment, isOngoing }: Drawable): string {
+  const { label } = eventColor(event.type)
+  if (isOngoing) {
+    const elapsed = formatDuration(event.start_time, new Date().toISOString())
+    return `${label} מ-${formatIsraelTime(event.start_time)}, עדיין בתהליך (${elapsed})`
+  }
   if (segment.isPointInTime || event.end_time === null) {
     return `${label} בשעה ${formatIsraelTime(event.start_time)}`
   }
-  return `${label} מ-${formatIsraelTime(event.start_time)} עד ${formatIsraelTime(event.end_time)}`
+  const duration = formatDuration(event.start_time, event.end_time)
+  const from = formatIsraelTime(event.start_time)
+  const to = formatIsraelTime(event.end_time)
+  return `${label} מ-${from} עד ${to}, משך ${duration}`
 }
 
 export function DayClock({ events, date, onArcClick }: DayClockProps) {
   // useId gives stable, collision-free ids so multiple clocks can coexist on a page.
-  const idPrefix = useId()
+  const idPrefix = useId().replace(/[^a-zA-Z0-9_-]/g, '')
 
-  const segments = useMemo(() => toClockSegments(events, date), [events, date])
-  const isEmpty = segments.length === 0
+  const { arcs, points } = useMemo(() => {
+    // Recomputed whenever the event list changes (including via realtime), which
+    // is also when a running timer's arc needs to grow.
+    const nowIso = new Date().toISOString()
+    const arcList: Drawable[] = []
+    const pointList: Drawable[] = []
 
-  const handleActivate = (event: Event) => {
-    onArcClick?.(event)
+    for (const event of events) {
+      const isOngoing = event.end_time === null && TIMER_TYPES.has(event.type)
+      const segment = clipEventToDay(
+        event.start_time,
+        isOngoing ? nowIso : event.end_time,
+        date,
+      )
+      if (!segment) continue
+      const drawable: Drawable = { event, segment, isOngoing }
+      if (segment.isPointInTime) pointList.push(drawable)
+      else arcList.push(drawable)
+    }
+
+    return { arcs: arcList, points: pointList }
+  }, [events, date])
+
+  const isEmpty = arcs.length === 0 && points.length === 0
+  const clickable = onArcClick !== undefined
+  const animationName = `${idPrefix}-clock-enter`
+
+  // The event whose details are shown in the dial's centre. Set on hover/focus
+  // (desktop) or tap (mobile); cleared by leaving it or tapping the dial face.
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const activeDrawable = useMemo(
+    () => [...arcs, ...points].find((drawable) => drawable.event.id === activeId) ?? null,
+    [arcs, points, activeId],
+  )
+
+  const interactionProps = (drawable: Drawable) => {
+    const show = () => setActiveId(drawable.event.id)
+    const hide = () => setActiveId((current) => (current === drawable.event.id ? null : current))
+    // Pointer/focus handlers surface the centre readout on every element,
+    // whether or not the clock is in editable (onArcClick) mode.
+    const shared = {
+      'aria-label': ariaLabelFor(drawable),
+      tabIndex: 0,
+      className: 'cursor-pointer focus:outline-none',
+      onMouseEnter: show,
+      onFocus: show,
+      onMouseLeave: hide,
+      onBlur: hide,
+      onClick: (mouseEvent: { stopPropagation: () => void }) => {
+        // Keep a tap on an element from bubbling to the face's clear-handler.
+        mouseEvent.stopPropagation()
+        show()
+        onArcClick?.(drawable.event)
+      },
+    }
+    if (clickable) {
+      return {
+        ...shared,
+        role: 'button' as const,
+        onKeyDown: (keyboardEvent: KeyboardEvent) => {
+          if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
+            keyboardEvent.preventDefault()
+            onArcClick(drawable.event)
+          }
+        },
+      }
+    }
+    return { ...shared, role: 'img' as const }
   }
-
-  const animationName = `${idPrefix}-clock-enter`.replace(/[^a-zA-Z0-9_-]/g, '')
 
   return (
     <div className="flex flex-col items-center gap-3">
       <svg
-        viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`}
+        viewBox={VIEWBOX}
         className="h-auto w-full max-w-xs"
         role="img"
         aria-label="שעון 24 שעות של אירועי היום"
+        onClick={() => setActiveId(null)}
       >
-        {/* Single, subtle entrance animation only (design-system: functional, <=200ms). */}
         <style>{`
           @keyframes ${animationName} {
             from { opacity: 0; transform: scale(0.98); }
@@ -84,140 +193,187 @@ export function DayClock({ events, date, onArcClick }: DayClockProps) {
             .${animationName} {
               transform-box: fill-box;
               transform-origin: center;
-              animation: ${animationName} 200ms ease-out both;
+              animation: ${animationName} var(--duration-base) ease-out both;
             }
           }
         `}</style>
 
         <defs>
-          {segments.map(({ event }, index) => {
-            const color = eventColor(event.type)
+          {RING_ORDER.map((type) => {
+            const { base, light } = eventColor(type)
             return (
               <linearGradient
-                key={`${idPrefix}-grad-${index}`}
-                id={`${idPrefix}-grad-${index}`}
+                key={type}
+                id={`${idPrefix}-grad-${type}`}
                 x1="0"
                 y1="0"
-                x2="1"
+                x2="0"
                 y2="1"
               >
-                <stop offset="0%" stopColor={color.light} />
-                <stop offset="100%" stopColor={color.base} />
+                <stop offset="0%" stopColor={light} />
+                <stop offset="100%" stopColor={base} />
               </linearGradient>
             )
           })}
         </defs>
 
         <g className={animationName}>
-          {/* Neutral background track (also the empty-state ring). */}
+          {/* Soft halo ripples behind the face. */}
+          {HALO_RADII.map((radius, index) => (
+            <circle
+              key={`halo-${radius}`}
+              cx={CENTER.x}
+              cy={CENTER.y}
+              r={radius}
+              fill="none"
+              stroke="var(--color-brand-300)"
+              strokeWidth={1.5}
+              strokeOpacity={0.18 - index * 0.05}
+            />
+          ))}
+
+          {/* White dial face. */}
           <circle
             cx={CENTER.x}
             cy={CENTER.y}
-            r={TRACK_RADIUS}
-            fill="none"
+            r={FACE_RADIUS}
+            fill="var(--color-neutral-0)"
             stroke="var(--color-neutral-200)"
-            strokeWidth={TRACK_STROKE}
+            strokeWidth={1}
           />
 
-          {/* Hour ticks + labels (00 at bottom, 12 at top). */}
-          {HOUR_TICKS.map((hour) => {
-            const angle = minutesToAngle((hour / 24) * MINUTES_IN_DAY)
-            const tickStart = pointOnCircle(CENTER, TICK_INNER, angle)
-            const tickEnd = pointOnCircle(CENTER, TICK_OUTER, angle)
-            const labelPoint = pointOnCircle(CENTER, TICK_OUTER + 7, angle)
+          {/* A full set of 24 hour ticks. Multiples of 6 (00/06/12/18) are the
+              strongest; every 3rd hour is emphasised and labelled, so there is a
+              time reference roughly every eighth of the dial without crowding it. */}
+          {Array.from({ length: 24 }, (_, hour) => {
+            const angle = minutesToAngle(hour * 60)
+            const isMajor = hour % 6 === 0
+            const isLabelled = hour % 3 === 0
+            const outer = pointOnCircle(CENTER, TICK_OUTER_RADIUS, angle)
+            const inner = pointOnCircle(
+              CENTER,
+              TICK_OUTER_RADIUS - (isMajor ? TICK_MAJOR_LENGTH : TICK_MINOR_LENGTH),
+              angle,
+            )
+            const label = pointOnCircle(CENTER, LABEL_RADIUS, angle)
             return (
               <g key={`tick-${hour}`}>
                 <line
-                  x1={tickStart.x}
-                  y1={tickStart.y}
-                  x2={tickEnd.x}
-                  y2={tickEnd.y}
-                  stroke="var(--color-neutral-400)"
-                  strokeWidth={1}
+                  x1={outer.x}
+                  y1={outer.y}
+                  x2={inner.x}
+                  y2={inner.y}
+                  stroke={isMajor ? 'var(--color-neutral-400)' : 'var(--color-neutral-200)'}
+                  strokeWidth={isMajor ? 2 : 1}
+                  strokeLinecap="round"
                 />
-                <text
-                  x={labelPoint.x}
-                  y={labelPoint.y}
-                  fill="var(--color-neutral-600)"
-                  fontSize={9}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                >
-                  {String(hour).padStart(2, '0')}
-                </text>
+                {isLabelled && (
+                  <text
+                    x={label.x}
+                    y={label.y}
+                    fill={isMajor ? 'var(--color-neutral-600)' : 'var(--color-neutral-400)'}
+                    fontSize={isMajor ? 10 : 8.5}
+                    fontWeight={isMajor ? 600 : 500}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                  >
+                    {hour === 0 ? '00:00' : `${hour}:00`}
+                  </text>
+                )}
               </g>
             )
           })}
 
-          {/* Event segments: arcs for durations, dots for point-in-time events. */}
-          {segments.map(({ event, segment }, index) => {
-            const color = eventColor(event.type)
-            const label = ariaLabelFor(event, segment)
-            const clickable = onArcClick !== undefined
+          {/* One faint track per event type, so every ring reads as a lane even
+              on a day with no events of that type. */}
+          {RINGS.map(({ type, radius }) => (
+            <circle
+              key={`track-${type}`}
+              cx={CENTER.x}
+              cy={CENTER.y}
+              r={radius}
+              fill="none"
+              stroke={`var(--color-${type}-50)`}
+              strokeWidth={RING_STROKE}
+            />
+          ))}
 
-            if (segment.isPointInTime) {
-              const angle = minutesToAngle(segment.startMinutes)
-              const dot = pointOnCircle(CENTER, TRACK_RADIUS, angle)
-              return (
-                <circle
-                  key={event.id}
-                  cx={dot.x}
-                  cy={dot.y}
-                  r={POINT_MARKER_RADIUS}
-                  fill={color.base}
-                  stroke="var(--color-neutral-0)"
-                  strokeWidth={1.5}
-                  role={clickable ? 'button' : 'img'}
-                  aria-label={label}
-                  tabIndex={clickable ? 0 : undefined}
-                  className={clickable ? 'cursor-pointer' : undefined}
-                  onClick={clickable ? () => handleActivate(event) : undefined}
-                  onKeyDown={
-                    clickable
-                      ? (keyboardEvent) => {
-                          if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
-                            keyboardEvent.preventDefault()
-                            handleActivate(event)
-                          }
-                        }
-                      : undefined
-                  }
-                />
-              )
-            }
+          {/* Duration events: thick rounded arcs on their type's fixed ring. */}
+          {arcs.map((drawable) => (
+            <path
+              key={drawable.event.id}
+              d={strokeArcPath(
+                CENTER,
+                ringRadius(drawable.event.type),
+                drawable.segment.startMinutes,
+                drawable.segment.endMinutes,
+              )}
+              fill="none"
+              stroke={`url(#${idPrefix}-grad-${drawable.event.type})`}
+              strokeWidth={RING_STROKE}
+              // An in-progress event gets a flat leading edge, so it reads as
+              // "not finished yet" rather than a completed, capped block.
+              strokeLinecap={drawable.isOngoing ? 'butt' : 'round'}
+              {...interactionProps(drawable)}
+            />
+          ))}
 
-            const path = ringArcPath(
+          {/* Point-in-time events (feeding / diaper / mood): dots on their ring. */}
+          {points.map((drawable) => {
+            const dot = pointOnCircle(
               CENTER,
-              INNER_RADIUS,
-              OUTER_RADIUS,
-              segment.startMinutes,
-              segment.endMinutes,
+              ringRadius(drawable.event.type),
+              minutesToAngle(drawable.segment.startMinutes),
             )
             return (
-              <path
-                key={event.id}
-                d={path}
-                fill={`url(#${idPrefix}-grad-${index})`}
+              <circle
+                key={drawable.event.id}
+                cx={dot.x}
+                cy={dot.y}
+                r={POINT_DOT_RADIUS}
+                fill={eventColor(drawable.event.type).base}
                 stroke="var(--color-neutral-0)"
-                strokeWidth={0.75}
-                role={clickable ? 'button' : 'img'}
-                aria-label={label}
-                tabIndex={clickable ? 0 : undefined}
-                className={clickable ? 'cursor-pointer' : undefined}
-                onClick={clickable ? () => handleActivate(event) : undefined}
-                onKeyDown={
-                  clickable
-                    ? (keyboardEvent) => {
-                        if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
-                          keyboardEvent.preventDefault()
-                          handleActivate(event)
-                        }
-                      }
-                    : undefined
-                }
+                strokeWidth={2}
+                {...interactionProps(drawable)}
               />
             )
           })}
+
+          {/* Centre readout: the hovered/tapped event's type, time and duration,
+              shown in the dial's hollow middle. This is the primary way to read
+              exact start/end/duration - the arcs alone only show position. */}
+          {activeDrawable &&
+            (() => {
+              const { label, lines } = describeEvent(activeDrawable)
+              const allLines = [label, ...lines]
+              const lineHeight = 14
+              const firstLineY = CENTER.y - ((allLines.length - 1) * lineHeight) / 2
+              return (
+                <g pointerEvents="none">
+                  {allLines.map((line, index) => {
+                    const isLabel = index === 0
+                    return (
+                      <text
+                        key={line + index}
+                        x={CENTER.x}
+                        y={firstLineY + index * lineHeight}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fill={
+                          isLabel
+                            ? eventColor(activeDrawable.event.type).base
+                            : 'var(--color-neutral-600)'
+                        }
+                        fontSize={isLabel ? 13 : 11}
+                        fontWeight={isLabel ? 700 : 500}
+                      >
+                        {line}
+                      </text>
+                    )
+                  })}
+                </g>
+              )
+            })()}
         </g>
       </svg>
 

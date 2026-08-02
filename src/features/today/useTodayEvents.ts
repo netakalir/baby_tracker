@@ -3,7 +3,10 @@ import type { Event } from '../../types/database'
 import {
   fetchTodayEvents,
   logImmediateEvent,
+  startTimerEvent,
+  stopTimerEvent,
   type ImmediateEventType,
+  type TimerEventType,
 } from './api'
 import { israelDateString } from './todayDate'
 
@@ -39,6 +42,36 @@ export function useLogImmediateEvent(childId: string) {
   return useMutation<Event, unknown, LogImmediateEventVariables>({
     mutationFn: ({ type, metadata }) =>
       logImmediateEvent(childId, type, metadata),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: todayEventsKey(childId) })
+    },
+  })
+}
+
+/**
+ * Starts a start/stop timer event (sleep / feeding) and refetches the child's
+ * "today" list so the new running arc appears immediately.
+ */
+export function useStartTimerEvent(childId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation<Event, unknown, { type: TimerEventType }>({
+    mutationFn: ({ type }) => startTimerEvent(childId, type),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: todayEventsKey(childId) })
+    },
+  })
+}
+
+/**
+ * Stops a running timer event by its id and refetches the child's "today" list
+ * so the arc updates from "in progress" to a completed, capped duration.
+ */
+export function useStopTimerEvent(childId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation<Event, unknown, { eventId: string }>({
+    mutationFn: ({ eventId }) => stopTimerEvent(eventId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: todayEventsKey(childId) })
     },

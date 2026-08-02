@@ -3,11 +3,11 @@ import { MINUTES_IN_DAY } from './dayWindow'
 /**
  * SVG geometry for the 24-hour clock.
  *
- * Orientation (documented, per spec section 3):
+ * Orientation (documented, per the reference design):
  *   - The clock is a 24-hour dial.
- *   - Midnight (00:00) is at the BOTTOM (6 o'clock position).
- *   - Noon (12:00) is at the TOP (12 o'clock position).
- *   - Time advances CLOCKWISE (00:00 bottom -> 06:00 left -> 12:00 top -> 18:00 right).
+ *   - Midnight (00:00) is at the TOP (12 o'clock position).
+ *   - Noon (12:00) is at the BOTTOM (6 o'clock position).
+ *   - Time advances CLOCKWISE (00:00 top -> 06:00 right -> 12:00 bottom -> 18:00 left).
  *
  * Note on RTL: the dial is a time instrument, not text flow, so clockwise time
  * progression is kept regardless of the app's RTL text direction (a clock reads
@@ -24,14 +24,10 @@ const FULL_CIRCLE_DEG = 360
 
 /**
  * Converts a minute-of-day (0..1440) to an angle in degrees on the SVG dial.
- *
- * SVG angle convention here: 0deg points up (12 o'clock, our noon), increasing
- * clockwise. Midnight sits at 180deg (bottom).
+ * 0deg points up (12 o'clock = midnight), increasing clockwise.
  */
 export function minutesToAngle(minutes: number): number {
-  const fractionOfDay = minutes / MINUTES_IN_DAY
-  // Offset by 180deg so 00:00 lands at the bottom, and go clockwise with time.
-  return (fractionOfDay * FULL_CIRCLE_DEG + 180) % FULL_CIRCLE_DEG
+  return ((minutes / MINUTES_IN_DAY) * FULL_CIRCLE_DEG) % FULL_CIRCLE_DEG
 }
 
 /** Point on a circle of the given radius at the given dial angle (degrees). */
@@ -45,33 +41,39 @@ export function pointOnCircle(center: Point, radius: number, angleDeg: number): 
 }
 
 /**
- * Builds an SVG path `d` string for a ring arc (annular sector outline) spanning
- * from `startMinutes` to `endMinutes` between `innerRadius` and `outerRadius`.
+ * Smallest sweep (in minutes) an arc is drawn with. A very short event would
+ * otherwise collapse to a zero-length path, which SVG renders as nothing at all
+ * even with a round linecap - so it is padded to stay visible as a small nub.
  */
-export function ringArcPath(
+const MIN_ARC_MINUTES = 4
+
+/**
+ * Builds an SVG path `d` string for a single-radius arc from `startMinutes` to
+ * `endMinutes`, meant to be *stroked* (with a round linecap) rather than filled -
+ * this gives the thick, rounded event arcs of the reference design.
+ *
+ * A sweep covering the whole day is split into two half-circles, because an SVG
+ * arc whose start and end points coincide is degenerate and draws nothing.
+ */
+export function strokeArcPath(
   center: Point,
-  innerRadius: number,
-  outerRadius: number,
+  radius: number,
   startMinutes: number,
   endMinutes: number,
 ): string {
-  const startAngle = minutesToAngle(startMinutes)
-  const endAngle = minutesToAngle(endMinutes)
+  const sweepMinutes = Math.min(Math.max(endMinutes - startMinutes, MIN_ARC_MINUTES), MINUTES_IN_DAY)
+  const start = pointOnCircle(center, radius, minutesToAngle(startMinutes))
 
-  const sweepMinutes = endMinutes - startMinutes
+  if (sweepMinutes >= MINUTES_IN_DAY) {
+    const opposite = pointOnCircle(center, radius, minutesToAngle(startMinutes + MINUTES_IN_DAY / 2))
+    return (
+      `M ${start.x} ${start.y} A ${radius} ${radius} 0 0 1 ${opposite.x} ${opposite.y}` +
+      ` A ${radius} ${radius} 0 0 1 ${start.x} ${start.y}`
+    )
+  }
+
+  const end = pointOnCircle(center, radius, minutesToAngle(startMinutes + sweepMinutes))
   const largeArcFlag = sweepMinutes / MINUTES_IN_DAY > 0.5 ? 1 : 0
-
-  const outerStart = pointOnCircle(center, outerRadius, startAngle)
-  const outerEnd = pointOnCircle(center, outerRadius, endAngle)
-  const innerEnd = pointOnCircle(center, innerRadius, endAngle)
-  const innerStart = pointOnCircle(center, innerRadius, startAngle)
-
-  // Outer edge clockwise (sweep flag 1), then inner edge counter-clockwise (0).
-  return [
-    `M ${outerStart.x} ${outerStart.y}`,
-    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${outerEnd.x} ${outerEnd.y}`,
-    `L ${innerEnd.x} ${innerEnd.y}`,
-    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${innerStart.x} ${innerStart.y}`,
-    'Z',
-  ].join(' ')
+  // Sweep flag 1 = clockwise, matching increasing time.
+  return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`
 }

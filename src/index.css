@@ -28,9 +28,9 @@
      Defined here once, when the Today screen is built (see design-system skill).
      `50` is the tinted button surface, `300` the lighter clock-gradient stop,
      `500` the solid accent. Never reuse a color across event types. */
-  --color-sleep-50: #eef2ff;
-  --color-sleep-300: #a5b4fc;
-  --color-sleep-500: #6366f1;
+  --color-sleep-50: #eff6ff;
+  --color-sleep-300: #93c5fd;
+  --color-sleep-500: #2563eb;
   --color-feeding-50: #fff7ed;
   --color-feeding-300: #fdba74;
   --color-feeding-500: #f97316;
@@ -58,6 +58,11 @@
   /* Motion (functional only, see design-system skill) */
   --duration-fast: 150ms;
   --duration-base: 200ms;
+
+  /* Elevation (soft, warm-tinted; functional layer separation only) */
+  --shadow-sm: 0 1px 2px 0 rgba(28, 25, 23, 0.06);
+  --shadow-md: 0 6px 16px -4px rgba(28, 25, 23, 0.1), 0 2px 4px -2px rgba(28, 25, 23, 0.06);
+  --shadow-lg: 0 12px 32px -8px rgba(28, 25, 23, 0.14);
 }
 
 *,

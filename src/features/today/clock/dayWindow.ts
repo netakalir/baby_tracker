@@ -111,8 +111,11 @@ export function clipEventToDay(
   const startMinutes = clampToDay(startMinutesRaw)
   const endMinutes = clampToDay(endMinutesRaw)
 
-  // A zero-length remaining segment after clipping carries no visual information.
-  if (endMinutes <= startMinutes) return null
+  // A negative-length segment means malformed data (end before start).
+  if (endMinutes < startMinutes) return null
 
+  // A zero-length segment is kept (not discarded) so a just-started or very
+  // short timer still renders as a small nub via the arc renderer's minimum
+  // sweep, instead of vanishing from the clock until a full minute has elapsed.
   return { startMinutes, endMinutes, isPointInTime: false }
 }
