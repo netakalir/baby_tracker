@@ -12,7 +12,7 @@ import { israelDateString } from './todayDate'
  * the key so the cache re-scopes automatically once the day rolls over past
  * Israel-local midnight, rather than serving yesterday's list.
  */
-function todayEventsKey(childId: string): [string, string, string] {
+export function todayEventsKey(childId: string): [string, string, string] {
   return ['today-events', childId, israelDateString()]
 }
 

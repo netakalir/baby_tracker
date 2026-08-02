@@ -40,6 +40,12 @@ export interface TestFactory {
    * past timestamp to seed an already-expired invite).
    */
   seedInvite(user: TestUser, familyId: string, options?: { expiresAt?: string }): Promise<string>
+  /**
+   * Adds `user` as a parent of an existing family, acting AS that user through
+   * RLS (the same self-insert the real invite-join flow ends with). Puts a
+   * second parent in the family so cross-device / realtime paths can be tested.
+   */
+  addMember(user: TestUser, familyId: string): Promise<void>
 }
 
 /**
@@ -123,6 +129,14 @@ export const test = base.extend<{ factory: TestFactory }>({
           .single<{ token: string }>()
         if (error) throw error
         return data.token
+      },
+
+      async addMember(user, familyId) {
+        const client = await clientFor(user)
+        const { error } = await client
+          .from('family_members')
+          .insert({ family_id: familyId, user_id: user.id, role: 'parent' })
+        if (error) throw error
       },
     }
 
