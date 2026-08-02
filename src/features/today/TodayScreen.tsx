@@ -1,14 +1,124 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Button } from '../../components/ui/Button'
-import { Card } from '../../components/ui/Card'
+import { Banner } from '../../components/ui/Banner'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
+import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
 import { signOut } from '../auth/api'
-import { useAuth } from '../auth/useAuth'
 import { useOnboardingStatus } from '../onboarding/useOnboardingStatus'
+import { ClockLegend } from './ClockLegend'
+import { DayClock } from './DayClock'
+import { EstimateBanners } from './EstimateBanners'
+import { QuickLogButtons } from './QuickLogButtons'
+import { useTodayEvents } from './useTodayEvents'
+import { useTodayEventsRealtime } from './useTodayEventsRealtime'
+
+/** "יום שלישי, 22 ביולי" - the current day, in Israel-local terms. */
+const headerDateFormatter = new Intl.DateTimeFormat('he-IL', {
+  timeZone: 'Asia/Jerusalem',
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+})
+
+interface TodayHeaderProps {
+  childName: string
+  onSignOut: () => void
+  isSigningOut: boolean
+}
+
+/**
+ * Top app bar: the date on the start side, and a child "pill" (avatar + name) on
+ * the end side - the entry point for the multi-child switcher (a later slice, so
+ * for now it is a static identity). Sign-out sits as a compact icon at the edge.
+ */
+function TodayHeader({ childName, onSignOut, isSigningOut }: TodayHeaderProps) {
+  return (
+    <header className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="truncate text-lg font-semibold text-neutral-900">
+          {headerDateFormatter.format(new Date())}
+        </p>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2">
+        <div className="flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-0 py-1 pe-2 ps-3 shadow-sm">
+          <h1 className="max-w-28 truncate text-sm font-medium text-neutral-800">
+            {childName}
+          </h1>
+          <span
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-50 text-base"
+            aria-hidden="true"
+          >
+            👶
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={onSignOut}
+          disabled={isSigningOut}
+          aria-label="התנתקות"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-colors duration-fast hover:bg-neutral-100 hover:text-neutral-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-60"
+        >
+          <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+            <path
+              d="M15 12H3m0 0 4-4m-4 4 4 4M17 4h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-2"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
+    </header>
+  )
+}
+
+interface TodayContentProps {
+  childId: string
+  childName: string
+  onSignOut: () => void
+  isSigningOut: boolean
+}
+
+/**
+ * The live "Today" view for a single child: header, the 24-hour clock (hero)
+ * fed by the child's events, a color legend, the estimate rows, and the sticky
+ * quick-log bar. Split out so `useTodayEvents` only mounts once we have a child.
+ */
+function TodayContent({ childId, childName, onSignOut, isSigningOut }: TodayContentProps) {
+  const today = new Date()
+  const { data: events, isError, error } = useTodayEvents(childId)
+
+  // Live sync: reflect the other parent's logs/edits/deletes without a refresh.
+  useTodayEventsRealtime(childId)
+
+  return (
+    <>
+      <TodayHeader childName={childName} onSignOut={onSignOut} isSigningOut={isSigningOut} />
+
+      {isError && (
+        <div className="mt-4">
+          <Banner message={toFriendlyDbErrorMessage(error)} variant="error" />
+        </div>
+      )}
+
+      <section className="mt-6 flex flex-col items-center gap-4">
+        <DayClock events={events ?? []} date={today} />
+        <ClockLegend />
+      </section>
+
+      <div className="mt-6">
+        <EstimateBanners />
+      </div>
+
+      <QuickLogButtons childId={childId} events={events ?? []} />
+    </>
+  )
+}
 
 export function TodayScreen() {
-  const { user } = useAuth()
   const { data: onboardingState } = useOnboardingStatus()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -24,21 +134,22 @@ export function TodayScreen() {
 
   if (!onboardingState) return <LoadingScreen />
 
+  const child = onboardingState.firstChild
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
-      <Card className="max-w-sm text-center">
-        <h1 className="mb-2 text-2xl font-semibold text-neutral-900">
-          {onboardingState.firstChild?.name}
-        </h1>
-        <p className="mb-6 text-sm text-neutral-600">מחובר/ת כ-{user?.email}</p>
-        <Button
-          variant="ghost"
-          onClick={() => signOutMutation.mutate()}
-          isLoading={signOutMutation.isPending}
-        >
-          התנתקות
-        </Button>
-      </Card>
+    <div className="min-h-screen bg-neutral-50 px-5 pb-40 pt-6">
+      <div className="mx-auto w-full max-w-sm">
+        {child ? (
+          <TodayContent
+            childId={child.id}
+            childName={child.name}
+            onSignOut={() => signOutMutation.mutate()}
+            isSigningOut={signOutMutation.isPending}
+          />
+        ) : (
+          <p className="mt-10 text-center text-sm text-neutral-600">לא נמצא/ה ילד/ה במשפחה</p>
+        )}
+      </div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { test as base, expect } from '@playwright/test'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import type { Child } from '../../src/types/database'
+import type { Child, Event } from '../../src/types/database'
 import { adminClient } from './adminClient'
 import { testEnv } from './testEnv'
 
@@ -40,6 +40,25 @@ export interface TestFactory {
    * past timestamp to seed an already-expired invite).
    */
   seedInvite(user: TestUser, familyId: string, options?: { expiresAt?: string }): Promise<string>
+  /**
+   * Inserts events for a child, acting AS the given user (through RLS). Used to
+   * seed clock state without going through the logging UI - e.g. an overnight
+   * event, or a duration event that the UI cannot yet create.
+   */
+  seedEvents(user: TestUser, childId: string, events: SeedEvent[]): Promise<void>
+  /**
+   * Adds `user` as a parent of an existing family, acting AS that user through
+   * RLS (the same self-insert the real invite-join flow ends with). Puts a
+   * second parent in the family so cross-device / realtime paths can be tested.
+   */
+  addMember(user: TestUser, familyId: string): Promise<void>
+}
+
+export interface SeedEvent {
+  type: Event['type']
+  start_time: string
+  end_time?: string | null
+  metadata?: Event['metadata']
 }
 
 /**
@@ -123,6 +142,28 @@ export const test = base.extend<{ factory: TestFactory }>({
           .single<{ token: string }>()
         if (error) throw error
         return data.token
+      },
+
+      async seedEvents(user, childId, events) {
+        const client = await clientFor(user)
+        const rows = events.map((event) => ({
+          child_id: childId,
+          type: event.type,
+          start_time: event.start_time,
+          end_time: event.end_time ?? null,
+          created_by: user.id,
+          metadata: event.metadata ?? null,
+        }))
+        const { error } = await client.from('events').insert(rows)
+        if (error) throw error
+      },
+
+      async addMember(user, familyId) {
+        const client = await clientFor(user)
+        const { error } = await client
+          .from('family_members')
+          .insert({ family_id: familyId, user_id: user.id, role: 'parent' })
+        if (error) throw error
       },
     }
 

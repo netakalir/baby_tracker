@@ -16,6 +16,14 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
   reporter: process.env.CI ? 'github' : 'list',
+  /*
+   * Web-first assertions poll until they pass, so this is an upper bound on a
+   * real async operation, not a fixed wait. The default 5s is too tight for the
+   * post-login redirect, which chains two round-trips to the *hosted* Supabase
+   * project (auth session, then the onboarding-status queries) - the main source
+   * of pre-existing flakiness in these tests.
+   */
+  expect: { timeout: 15_000 },
   use: {
     baseURL: testEnv.baseUrl,
     trace: 'on-first-retry',

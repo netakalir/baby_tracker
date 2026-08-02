@@ -24,10 +24,10 @@ test.describe('authentication and onboarding', () => {
     await page.locator('#birthDate').fill('2026-03-01')
     await page.locator('button[type="submit"]').click()
 
-    // Onboarding complete -> Today screen shows the child and the signed-in email.
+    // Onboarding complete -> Today screen shows the child and the 24-hour clock.
     await expect(page).toHaveURL(/\/today$/)
     await expect(page.getByRole('heading', { name: 'נועה' })).toBeVisible()
-    await expect(page.getByText(`מחובר/ת כ-${user.email}`)).toBeVisible()
+    await expect(page.getByRole('img', { name: 'שעון 24 שעות של אירועי היום' })).toBeVisible()
 
     // Sign-out returns to the auth screen.
     await page.getByRole('button', { name: 'התנתקות' }).click()

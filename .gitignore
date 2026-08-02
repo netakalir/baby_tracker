@@ -38,3 +38,10 @@ dist-ssr
 
 #Folder
 Documentation/
+
+# Agent worktrees (isolated subagent branches live here)
+.claude/worktrees/
+
+# Dev-only seed scripts (read the service_role key from .env.test, not for prod)
+.seed-events.mjs
+.seed-preview.mjs
