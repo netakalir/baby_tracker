@@ -10,6 +10,7 @@ import { DayClock } from './DayClock'
 import { EstimateBanners } from './EstimateBanners'
 import { QuickLogButtons } from './QuickLogButtons'
 import { useTodayEvents } from './useTodayEvents'
+import { useTodayEventsRealtime } from './useTodayEventsRealtime'
 
 /** "יום שלישי, 22 ביולי" - the current day, in Israel-local terms. */
 const headerDateFormatter = new Intl.DateTimeFormat('he-IL', {
@@ -89,6 +90,9 @@ interface TodayContentProps {
 function TodayContent({ childId, childName, onSignOut, isSigningOut }: TodayContentProps) {
   const today = new Date()
   const { data: events, isError, error } = useTodayEvents(childId)
+
+  // Live sync: reflect the other parent's logs/edits/deletes without a refresh.
+  useTodayEventsRealtime(childId)
 
   return (
     <>

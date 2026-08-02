@@ -46,6 +46,12 @@ export interface TestFactory {
    * event, or a duration event that the UI cannot yet create.
    */
   seedEvents(user: TestUser, childId: string, events: SeedEvent[]): Promise<void>
+  /**
+   * Adds `user` as a parent of an existing family, acting AS that user through
+   * RLS (the same self-insert the real invite-join flow ends with). Puts a
+   * second parent in the family so cross-device / realtime paths can be tested.
+   */
+  addMember(user: TestUser, familyId: string): Promise<void>
 }
 
 export interface SeedEvent {
@@ -149,6 +155,14 @@ export const test = base.extend<{ factory: TestFactory }>({
           metadata: event.metadata ?? null,
         }))
         const { error } = await client.from('events').insert(rows)
+        if (error) throw error
+      },
+
+      async addMember(user, familyId) {
+        const client = await clientFor(user)
+        const { error } = await client
+          .from('family_members')
+          .insert({ family_id: familyId, user_id: user.id, role: 'parent' })
         if (error) throw error
       },
     }
