@@ -5,6 +5,7 @@ import { eventColor } from './clock/eventColors'
 import { minutesToAngle, pointOnCircle, strokeArcPath, type Point } from './clock/geometry'
 import { RING_ORDER, RING_STROKE, RINGS, ringRadius } from './clock/rings'
 import { formatDuration, formatIsraelTime } from './clock/timeFormat'
+import { feedingDetailLabel } from './feedingChoice'
 
 interface DayClockProps {
   /** Events for the displayed day (from `src/types/database.ts`). */
@@ -61,9 +62,21 @@ interface EventDescription {
   readonly lines: readonly string[]
 }
 
+/**
+ * The event-type label, enriched for feeding with its breast/bottle detail
+ * (e.g. "האכלה · הנקה · ימין"). Feeding stays one type/color; the split is a
+ * metadata detail surfaced only in the label.
+ */
+function eventLabel(event: Event): string {
+  const { label } = eventColor(event.type)
+  if (event.type !== 'feeding') return label
+  const detail = feedingDetailLabel(event.metadata)
+  return detail ? `${label} · ${detail}` : label
+}
+
 /** Structured, human-readable summary of an event: its type and time details. */
 function describeEvent({ event, segment, isOngoing }: Drawable): EventDescription {
-  const { label } = eventColor(event.type)
+  const label = eventLabel(event)
   if (isOngoing) {
     const elapsed = formatDuration(event.start_time, new Date().toISOString())
     return { label, lines: [`מ-${formatIsraelTime(event.start_time)}`, `בתהליך · ${elapsed}`] }
@@ -87,7 +100,7 @@ function describeEvent({ event, segment, isOngoing }: Drawable): EventDescriptio
  * 06:10, משך 7ש׳ 30ד׳" rather than "22:40–06:10 · 7ש׳ 30ד׳").
  */
 function ariaLabelFor({ event, segment, isOngoing }: Drawable): string {
-  const { label } = eventColor(event.type)
+  const label = eventLabel(event)
   if (isOngoing) {
     const elapsed = formatDuration(event.start_time, new Date().toISOString())
     return `${label} מ-${formatIsraelTime(event.start_time)}, עדיין בתהליך (${elapsed})`

@@ -63,7 +63,11 @@ export async function logImmediateEvent(
  * timer per type is enforced by the UI (the button toggles to "stop" while one
  * is running), so this never opens a second timer of the same type.
  */
-export async function startTimerEvent(childId: string, type: TimerEventType): Promise<Event> {
+export async function startTimerEvent(
+  childId: string,
+  type: TimerEventType,
+  metadata?: Record<string, unknown>,
+): Promise<Event> {
   const userId = await requireUserId()
 
   const { data, error } = await supabase
@@ -74,7 +78,7 @@ export async function startTimerEvent(childId: string, type: TimerEventType): Pr
       start_time: new Date().toISOString(),
       end_time: null,
       created_by: userId,
-      metadata: null,
+      metadata: metadata ?? null,
     })
     .select()
     .single<Event>()
@@ -87,11 +91,22 @@ export async function startTimerEvent(childId: string, type: TimerEventType): Pr
  * Stops a running timer event by setting its `end_time` to now. The `end_time
  * is null` guard makes this idempotent: a double-stop (e.g. two devices) closes
  * the event exactly once instead of overwriting an already-recorded end.
+ *
+ * An optional `metadata` replaces the event's metadata as part of the same
+ * update - used to record a bottle's amount, captured only when the feed ends.
+ * The caller merges it with the existing metadata so earlier fields (feeding
+ * type, side) are preserved; omit it to leave the metadata untouched.
  */
-export async function stopTimerEvent(eventId: string): Promise<Event> {
+export async function stopTimerEvent(
+  eventId: string,
+  metadata?: Record<string, unknown>,
+): Promise<Event> {
   const { data, error } = await supabase
     .from('events')
-    .update({ end_time: new Date().toISOString() })
+    .update({
+      end_time: new Date().toISOString(),
+      ...(metadata ? { metadata } : {}),
+    })
     .eq('id', eventId)
     .is('end_time', null)
     .select()

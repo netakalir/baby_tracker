@@ -8,6 +8,25 @@ export type FamilyMemberRole = 'parent'
 
 export type EventType = 'sleep' | 'feeding' | 'diaper' | 'mood'
 
+/** How a feeding was given. Stored in a feeding event's `metadata`, not as its own event type. */
+export type FeedingType = 'breast' | 'bottle'
+
+/** The breast used, when `feeding_type` is `breast`. */
+export type BreastSide = 'left' | 'right'
+
+/**
+ * Shape of a `feeding` event's `metadata`. Breast/bottle and side are details of
+ * a single "feeding" event (one clock arc, one color), so they live in the jsonb
+ * `metadata` rather than as new `EventType`s - no schema migration needed.
+ */
+export interface FeedingMetadata {
+  feeding_type: FeedingType
+  /** Present only when `feeding_type === 'breast'`. */
+  side?: BreastSide
+  /** Optional amount, mainly for bottle feeds (future expansion). */
+  amount?: number
+}
+
 export interface Family {
   id: string
   name: string
