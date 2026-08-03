@@ -1,5 +1,5 @@
 # סיכום התקדמות - Baby Tracker
-**תאריך עדכון אחרון:** יולי 2026
+**תאריך עדכון אחרון:** אוגוסט 2026
 
 ---
 
@@ -18,6 +18,7 @@
 | `screen-week-spec.md` | אפיון מסך "שבוע" |
 | `screen-day-comparison-spec.md` | אפיון מסך "השוואת ימים" |
 | `age-content-and-ai-tooltips-spec.md` | תאב מידע לפי גיל + tooltips AI |
+| `screen-settings-spec.md` | אפיון מסך הגדרות + העדפות משתמש (per-user / per-family) |
 
 ### שלב 2: Skills ל-Claude Code ✅
 5 skills מוכנים ב-`.claude/skills/`:
@@ -111,6 +112,21 @@
 | 9 | תאב "מידע לפי גיל" + Edge Function | 2 |
 | 10 | Tooltips AI על גרפים | 6, 7, 9 |
 | 11 | PWA (manifest + service worker) | כל השאר |
+| 12 | מסך הגדרות + העדפות משתמש (`screen-settings-spec.md`) | 2, 3 |
+
+**פירוק משימה 12 (הגדרות) לתתי-משימות:**
+
+| # | תת-משימה | תלוי ב | סוג |
+|---|---|---|---|
+| 12a | מיגרציה + RLS + טסט: טבלת `user_preferences` (per-user) | 2 | DB |
+| 12b | מיגרציה + RLS + טסט: טבלת `family_settings` (per-family, `units`+`day_start`) | 2 | DB |
+| 12c | Settings hub UI (כניסה מגלגל שיניים ב-Today, drill-in ל-4 קטגוריות) | 3 | FE |
+| 12d | תת-מסך "פרופיל וחשבון" (שם, אימייל, התנתקות, מחיקת חשבון = leave-only) | 12a, 12c | FE |
+| 12e | תת-מסך "תינוק ומשפחה" (שם/תאריך לידה, חברי משפחה, הזמנה, בורר ילד) | 12c | FE |
+| 12f | תת-מסך "תצוגה ושפה" (שפה+RTL, ערכת נושא = per-user; יחידות+שעת-יום = per-family) | 12a, 12b, 12c | FE |
+| 12g | תת-מסך "התראות" (טוגלים per-user, ללא push בפועל ב-MVP) | 12a, 12c | FE |
+
+**נדחה לאפיון נפרד:** מדיניות תוקף טוקן (בדיקת תוקף במקום אימות בכל כניסה) — `screen-settings-spec.md §8`; ניקוי משפחות יתומות (מחיקת חבר אחרון).
 
 ### לא ב-MVP (שלבים עתידיים)
 - **Phase 2:** עקומות גדילה WHO + אבני דרך התפתחותיות
