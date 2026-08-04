@@ -68,12 +68,19 @@ pattern the user chose over a dedicated nav tab.
 |---|---|---|---|
 | Language (Hebrew / English) + RTL | **per-user** | `user_preferences.language` | Drives text direction |
 | Theme (light / dark / system) | **per-user** | `user_preferences.theme` | Follows the design system |
-| Measurement units (ml / oz) | **per-family** | `family_settings.units` | Must match for both parents |
+| Measurement units (ml / oz) | **per-user** | `user_preferences.units` | Lossless display choice — see rationale |
 | Day-start time | **per-family** | `family_settings.day_start` | Defines the midnight/day boundary rule used by Today (computed in Israel local time — see CLAUDE.md timezone principle) |
 
-Rationale for the per-family items: if one parent saw ml and the other oz on the
-same feeding, or "today" started at a different hour per parent, the shared Today
-clock would look different to each of them.
+Rationale — **units are per-user**: feeding amounts are stored canonically in
+millilitres (`events.metadata.amount`), so ml ⇄ oz is a lossless conversion of the
+*same* physical quantity — exactly like the UTC-store / Israel-local-display
+timezone principle. Each parent can view (and input) in their own unit without ever
+making the shared number contradictory, so it is personal chrome, not shared data.
+
+Rationale — **day-start stays per-family**: unlike units, it is not a transform of a
+single value but an *aggregation boundary* that decides which events fall into
+"today". It feeds shared, server-computed rollups (daily summaries, AI Insights), so
+a single family value keeps those unambiguous rather than diverging per parent.
 
 ### 3.4 🔔 Notifications  (per-user, **preferences only in MVP**)
 
@@ -98,6 +105,7 @@ One row per user. RLS: a user can select/update **only their own** row.
 | display_name | text (nullable) | |
 | language | text | `'he'` \| `'en'`, default `'he'` |
 | theme | text | `'light'` \| `'dark'` \| `'system'`, default `'system'` |
+| units | text | `'ml'` \| `'oz'`, default `'ml'` — personal display unit (amounts stored canonically in ml) |
 | notif_feeding | boolean | default false |
 | notif_sleep | boolean | default false |
 | notif_daily_summary | boolean | default false |
@@ -112,9 +120,13 @@ repeatedly altering the core `families` table.
 | Column | Type | Notes |
 |---|---|---|
 | family_id | uuid (PK, FK → families) | one row per family |
-| units | text | `'ml'` \| `'oz'`, default `'ml'` |
 | day_start | time | default `'00:00'`; the day boundary used by Today (applied in Israel local time — see CLAUDE.md timezone principle) |
 | updated_at | timestamptz | |
+
+> **Scope revision:** `units` originally lived here but was moved to
+> `user_preferences` (per-user) — see the §3.3 rationale and the
+> `20260804000000_move_units_to_user_preferences` migration. `day_start` remains
+> family-scoped.
 
 The row is created (with defaults) when the family is created, or lazily on first read.
 

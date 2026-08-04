@@ -178,12 +178,15 @@ function SettingSection({ title, note, children }: SettingSectionProps) {
 const FAMILY_SCOPE_NOTE = 'חל על כל המשפחה — שני ההורים רואים את אותו הערך.'
 
 /**
- * The "Display & language" settings sub-screen (spec §3.3). Four controls split
- * by scope: language + theme are per-user (user_preferences), while measurement
- * units + day-start are per-family (family_settings) and therefore shared.
+ * The "Display & language" settings sub-screen (spec §3.3). Controls split by
+ * scope: language + theme + units are per-user (user_preferences), while
+ * day-start is per-family (family_settings) and therefore shared. Units are
+ * per-user because amounts are stored canonically in ml, so ml/oz is a lossless
+ * per-viewer display choice (see the move_units_to_user_preferences migration).
  *
- * Note: this screen only stores and reflects the language preference. Live i18n
- * and app-wide RTL switching are a later layer (spec §5) — not wired here.
+ * Note: this screen only stores and reflects the preferences. Live i18n / RTL
+ * switching, applying the theme, and converting amounts by the chosen unit are a
+ * later layer (spec §5) — not wired here.
  */
 export function DisplayScreen() {
   const queryClient = useQueryClient()
@@ -244,17 +247,20 @@ export function DisplayScreen() {
 
   const language = preferences?.language ?? DEFAULT_LANGUAGE
   const theme = preferences?.theme ?? DEFAULT_THEME
-  const units = familySettings?.units ?? DEFAULT_UNITS
+  const units = preferences?.units ?? DEFAULT_UNITS
   const dayStart = (familySettings?.day_start ?? DEFAULT_DAY_START).slice(0, 5)
 
   /** Builds the full user_preferences row from current values, overriding one field. */
-  const savePreferences = (patch: Partial<Pick<UserPreferences, 'language' | 'theme'>>) => {
+  const savePreferences = (
+    patch: Partial<Pick<UserPreferences, 'language' | 'theme' | 'units'>>,
+  ) => {
     if (!userId) return
     preferencesMutation.mutate({
       user_id: userId,
       display_name: preferences?.display_name ?? null,
       language: patch.language ?? language,
       theme: patch.theme ?? theme,
+      units: patch.units ?? units,
       notif_feeding: preferences?.notif_feeding ?? false,
       notif_sleep: preferences?.notif_sleep ?? false,
       notif_daily_summary: preferences?.notif_daily_summary ?? false,
@@ -262,11 +268,10 @@ export function DisplayScreen() {
   }
 
   /** Builds the full family_settings row from current values, overriding one field. */
-  const saveFamilySettings = (patch: Partial<Pick<FamilySettings, 'units' | 'day_start'>>) => {
+  const saveFamilySettings = (patch: Partial<Pick<FamilySettings, 'day_start'>>) => {
     if (!familyId) return
     familySettingsMutation.mutate({
       family_id: familyId,
-      units: patch.units ?? units,
       day_start: patch.day_start ?? dayStart,
     })
   }
@@ -307,13 +312,13 @@ export function DisplayScreen() {
             />
           </SettingSection>
 
-          <SettingSection title="יחידות מדידה" note={FAMILY_SCOPE_NOTE}>
+          <SettingSection title="יחידות מדידה">
             <SegmentedControl
               ariaLabel="יחידות מדידה"
               options={UNIT_OPTIONS}
               value={units}
-              disabled={familyControlsDisabled}
-              onChange={(value) => saveFamilySettings({ units: value })}
+              disabled={isSaving}
+              onChange={(value) => savePreferences({ units: value })}
             />
           </SettingSection>
 

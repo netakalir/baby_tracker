@@ -82,15 +82,23 @@ export type AppLanguage = 'he' | 'en'
 
 export type AppTheme = 'light' | 'dark' | 'system'
 
+export type MeasurementUnit = 'ml' | 'oz'
+
 /**
- * Per-user settings (supabase/migrations/20260803000000_user_preferences.sql).
+ * Per-user settings (user_preferences migrations).
  * One row per auth user; never shared with the other parent.
+ *
+ * `units` lives here (not in family_settings): amounts are stored canonically
+ * in millilitres, so ml <-> oz is a lossless per-viewer display choice, exactly
+ * like the UTC-store / local-display timezone principle (see the
+ * 20260804000000_move_units_to_user_preferences migration).
  */
 export interface UserPreferences {
   user_id: string
   display_name: string | null
   language: AppLanguage
   theme: AppTheme
+  units: MeasurementUnit
   notif_feeding: boolean
   notif_sleep: boolean
   notif_daily_summary: boolean
@@ -99,21 +107,27 @@ export interface UserPreferences {
 
 export type UserPreferencesUpsert = Pick<
   UserPreferences,
-  'user_id' | 'display_name' | 'language' | 'theme' | 'notif_feeding' | 'notif_sleep' | 'notif_daily_summary'
+  | 'user_id'
+  | 'display_name'
+  | 'language'
+  | 'theme'
+  | 'units'
+  | 'notif_feeding'
+  | 'notif_sleep'
+  | 'notif_daily_summary'
 >
 
-export type MeasurementUnit = 'ml' | 'oz'
-
 /**
- * Per-family settings (supabase/migrations/20260803000001_family_settings.sql).
+ * Per-family settings (family_settings migrations).
  * Shared across the family; `day_start` is a 'HH:MM[:SS]' time-of-day string
  * applied client-side in Israel local time (see CLAUDE.md timezone principle).
+ * It stays family-scoped because it is an aggregation boundary feeding shared,
+ * server-computed rollups (daily summaries, AI Insights) — unlike `units`.
  */
 export interface FamilySettings {
   family_id: string
-  units: MeasurementUnit
   day_start: string
   updated_at: string
 }
 
-export type FamilySettingsUpsert = Pick<FamilySettings, 'family_id' | 'units' | 'day_start'>
+export type FamilySettingsUpsert = Pick<FamilySettings, 'family_id' | 'day_start'>

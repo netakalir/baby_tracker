@@ -35,17 +35,17 @@ test.describe('family_settings isolation', () => {
     // A lazily creates its family's settings row (allowed by the INSERT policy).
     const { error: insertError } = await clientA
       .from('family_settings')
-      .insert({ family_id: familyA.familyId, units: 'oz', day_start: '07:00' })
+      .insert({ family_id: familyA.familyId, day_start: '07:00' })
     expect(insertError).toBeNull()
 
     // A can read back its own settings.
     const { data: ownRows, error: ownReadError } = await clientA
       .from('family_settings')
-      .select('family_id, units, day_start')
+      .select('family_id, day_start')
       .eq('family_id', familyA.familyId)
     expect(ownReadError).toBeNull()
     expect(ownRows).toHaveLength(1)
-    expect(ownRows?.[0]?.units).toBe('oz')
+    expect(ownRows?.[0]?.day_start).toBe('07:00:00')
 
     // B cannot SELECT A's settings row (RLS filters it out -> empty set).
     const { data: bReadsA, error: bReadError } = await clientB
@@ -58,7 +58,7 @@ test.describe('family_settings isolation', () => {
     // B cannot UPDATE A's settings row (RLS matches no rows -> no change).
     const { data: bUpdatesA, error: bUpdateError } = await clientB
       .from('family_settings')
-      .update({ units: 'ml' })
+      .update({ day_start: '09:00' })
       .eq('family_id', familyA.familyId)
       .select('family_id')
     expect(bUpdateError).toBeNull()
@@ -67,14 +67,14 @@ test.describe('family_settings isolation', () => {
     // Confirm A's row is untouched.
     const { data: afterRows } = await clientA
       .from('family_settings')
-      .select('units')
+      .select('day_start')
       .eq('family_id', familyA.familyId)
-    expect(afterRows?.[0]?.units).toBe('oz')
+    expect(afterRows?.[0]?.day_start).toBe('07:00:00')
 
     // B cannot INSERT a settings row for A's family (WITH CHECK rejects it).
     const { error: bInsertError } = await clientB
       .from('family_settings')
-      .insert({ family_id: familyA.familyId, units: 'ml' })
+      .insert({ family_id: familyA.familyId, day_start: '09:00' })
     expect(bInsertError).not.toBeNull()
 
     await clientA.auth.signOut()
