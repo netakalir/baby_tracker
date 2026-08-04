@@ -118,9 +118,9 @@
 
 | # | תת-משימה | תלוי ב | סוג |
 |---|---|---|---|
-| 12a | מיגרציה + RLS + טסט: טבלת `user_preferences` (per-user) | 2 | DB |
-| 12b | מיגרציה + RLS + טסט: טבלת `family_settings` (per-family, `units`+`day_start`) | 2 | DB |
-| 12c | Settings hub UI (כניסה מגלגל שיניים ב-Today, drill-in ל-4 קטגוריות) | 3 | FE |
+| 12a | ~~מיגרציה + RLS + טסט: טבלת `user_preferences` (per-user)~~ ✅ נדחף ל-remote + טסט בידוד עובר | 2 | DB |
+| 12b | ~~מיגרציה + RLS + טסט: טבלת `family_settings` (per-family, `units`+`day_start`)~~ ✅ נדחף ל-remote + טסט בידוד עובר | 2 | DB |
+| 12c | ~~Settings hub UI (כניסה מגלגל שיניים ב-Today, drill-in ל-4 קטגוריות)~~ ✅ נבנה (typecheck+lint נקי), placeholders ל-12d–12g | 3 | FE |
 | 12d | תת-מסך "פרופיל וחשבון" (שם, אימייל, התנתקות, מחיקת חשבון = leave-only) | 12a, 12c | FE |
 | 12e | תת-מסך "תינוק ומשפחה" (שם/תאריך לידה, חברי משפחה, הזמנה, בורר ילד) | 12c | FE |
 | 12f | תת-מסך "תצוגה ושפה" (שפה+RTL, ערכת נושא = per-user; יחידות+שעת-יום = per-family) | 12a, 12b, 12c | FE |
