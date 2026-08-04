@@ -1,9 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { Banner } from '../../components/ui/Banner'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
-import { signOut } from '../auth/api'
 import { useOnboardingStatus } from '../onboarding/useOnboardingStatus'
 import { ClockLegend } from './ClockLegend'
 import { DayClock } from './DayClock'
@@ -22,16 +20,16 @@ const headerDateFormatter = new Intl.DateTimeFormat('he-IL', {
 
 interface TodayHeaderProps {
   childName: string
-  onSignOut: () => void
-  isSigningOut: boolean
+  onOpenSettings: () => void
 }
 
 /**
  * Top app bar: the date on the start side, and a child "pill" (avatar + name) on
  * the end side - the entry point for the multi-child switcher (a later slice, so
- * for now it is a static identity). Sign-out sits as a compact icon at the edge.
+ * for now it is a static identity). A settings gear sits as a compact icon at the
+ * edge, pushing the Settings hub (which holds sign-out and preferences).
  */
-function TodayHeader({ childName, onSignOut, isSigningOut }: TodayHeaderProps) {
+function TodayHeader({ childName, onOpenSettings }: TodayHeaderProps) {
   return (
     <header className="flex items-center justify-between gap-3">
       <div className="min-w-0">
@@ -55,14 +53,20 @@ function TodayHeader({ childName, onSignOut, isSigningOut }: TodayHeaderProps) {
 
         <button
           type="button"
-          onClick={onSignOut}
-          disabled={isSigningOut}
-          aria-label="התנתקות"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-colors duration-fast hover:bg-neutral-100 hover:text-neutral-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-60"
+          onClick={onOpenSettings}
+          aria-label="הגדרות"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-colors duration-fast hover:bg-neutral-100 hover:text-neutral-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         >
           <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
             <path
-              d="M15 12H3m0 0 4-4m-4 4 4 4M17 4h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-2"
+              d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
               stroke="currentColor"
               strokeWidth="1.75"
               strokeLinecap="round"
@@ -78,8 +82,7 @@ function TodayHeader({ childName, onSignOut, isSigningOut }: TodayHeaderProps) {
 interface TodayContentProps {
   childId: string
   childName: string
-  onSignOut: () => void
-  isSigningOut: boolean
+  onOpenSettings: () => void
 }
 
 /**
@@ -87,7 +90,7 @@ interface TodayContentProps {
  * fed by the child's events, a color legend, the estimate rows, and the sticky
  * quick-log bar. Split out so `useTodayEvents` only mounts once we have a child.
  */
-function TodayContent({ childId, childName, onSignOut, isSigningOut }: TodayContentProps) {
+function TodayContent({ childId, childName, onOpenSettings }: TodayContentProps) {
   const today = new Date()
   const { data: events, isError, error } = useTodayEvents(childId)
 
@@ -96,7 +99,7 @@ function TodayContent({ childId, childName, onSignOut, isSigningOut }: TodayCont
 
   return (
     <>
-      <TodayHeader childName={childName} onSignOut={onSignOut} isSigningOut={isSigningOut} />
+      <TodayHeader childName={childName} onOpenSettings={onOpenSettings} />
 
       {isError && (
         <div className="mt-4">
@@ -120,17 +123,7 @@ function TodayContent({ childId, childName, onSignOut, isSigningOut }: TodayCont
 
 export function TodayScreen() {
   const { data: onboardingState } = useOnboardingStatus()
-  const queryClient = useQueryClient()
   const navigate = useNavigate()
-
-  const signOutMutation = useMutation({
-    mutationFn: signOut,
-    onSuccess: () => {
-      // Drop any cached data belonging to the user who just signed out.
-      queryClient.clear()
-      navigate('/auth')
-    },
-  })
 
   if (!onboardingState) return <LoadingScreen />
 
@@ -143,8 +136,7 @@ export function TodayScreen() {
           <TodayContent
             childId={child.id}
             childName={child.name}
-            onSignOut={() => signOutMutation.mutate()}
-            isSigningOut={signOutMutation.isPending}
+            onOpenSettings={() => navigate('/settings')}
           />
         ) : (
           <p className="mt-10 text-center text-sm text-neutral-600">לא נמצא/ה ילד/ה במשפחה</p>

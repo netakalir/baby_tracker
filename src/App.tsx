@@ -7,6 +7,11 @@ import { AddChildScreen } from './features/onboarding/AddChildScreen'
 import { CreateFamilyScreen } from './features/onboarding/CreateFamilyScreen'
 import { CreateOrJoinScreen } from './features/onboarding/CreateOrJoinScreen'
 import { JoinFamilyScreen } from './features/onboarding/JoinFamilyScreen'
+import { BabyFamilyScreen } from './features/settings/BabyFamilyScreen'
+import { DisplayScreen } from './features/settings/DisplayScreen'
+import { NotificationsScreen } from './features/settings/NotificationsScreen'
+import { ProfileScreen } from './features/settings/ProfileScreen'
+import { SettingsScreen } from './features/settings/SettingsScreen'
 import { TodayScreen } from './features/today/TodayScreen'
 import { RootRedirect } from './routes/RootRedirect'
 import {
@@ -52,6 +57,15 @@ function App() {
 
           <Route element={<RequireOnboardingStatus allow="ready" />}>
             <Route path="/today" element={<TodayScreen />} />
+
+            {/* Settings is a pushed screen reached from the Today header gear,
+                not a bottom-nav tab. Placeholders here are filled by later
+                slices (12d-12g), each owning exactly one route/file. */}
+            <Route path="/settings" element={<SettingsScreen />} />
+            <Route path="/settings/profile" element={<ProfileScreen />} />
+            <Route path="/settings/baby-family" element={<BabyFamilyScreen />} />
+            <Route path="/settings/display" element={<DisplayScreen />} />
+            <Route path="/settings/notifications" element={<NotificationsScreen />} />
           </Route>
         </Route>
       </Route>
