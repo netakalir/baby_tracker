@@ -55,8 +55,8 @@ export function useLogImmediateEvent(childId: string) {
 export function useStartTimerEvent(childId: string) {
   const queryClient = useQueryClient()
 
-  return useMutation<Event, unknown, { type: TimerEventType }>({
-    mutationFn: ({ type }) => startTimerEvent(childId, type),
+  return useMutation<Event, unknown, { type: TimerEventType; metadata?: Record<string, unknown> }>({
+    mutationFn: ({ type, metadata }) => startTimerEvent(childId, type, metadata),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: todayEventsKey(childId) })
     },
@@ -70,8 +70,8 @@ export function useStartTimerEvent(childId: string) {
 export function useStopTimerEvent(childId: string) {
   const queryClient = useQueryClient()
 
-  return useMutation<Event, unknown, { eventId: string }>({
-    mutationFn: ({ eventId }) => stopTimerEvent(eventId),
+  return useMutation<Event, unknown, { eventId: string; metadata?: Record<string, unknown> }>({
+    mutationFn: ({ eventId, metadata }) => stopTimerEvent(eventId, metadata),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: todayEventsKey(childId) })
     },

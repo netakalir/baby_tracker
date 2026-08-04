@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Banner } from '../../components/ui/Banner'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
-import type { Event, EventType } from '../../types/database'
+import type { Event, EventType, FeedingMetadata } from '../../types/database'
 import type { ImmediateEventType, TimerEventType } from './api'
 import { eventColor } from './clock/eventColors'
+import {
+  BOTTLE_AMOUNT_OPTIONS_ML,
+  FEEDING_CHOICES,
+  breastSideLabel,
+  formatMilliliters,
+  readLastBreastSide,
+  writeLastBreastSide,
+  type FeedingChoice,
+} from './feedingChoice'
 import { formatStopwatch } from './clock/timeFormat'
 import { useLogImmediateEvent, useStartTimerEvent, useStopTimerEvent } from './useTodayEvents'
 
@@ -120,6 +129,13 @@ interface TimerButtonProps {
   disabled: boolean
   onStart: () => void
   onStop: (eventId: string) => void
+  /**
+   * When set, an idle tap opens a menu (via `onStart`) rather than starting the
+   * timer directly - used by feeding to pick breast/bottle first. Ignored while
+   * a timer is running (then the button is a plain "stop" toggle).
+   */
+  idleHasPopup?: boolean
+  idleExpanded?: boolean
 }
 
 /**
@@ -127,9 +143,20 @@ interface TimerButtonProps {
  * quick-log buttons; while running it fills with the event color and shows a
  * live stopwatch, and tapping it again stops the timer.
  */
-function TimerButton({ type, emoji, activeEvent, now, disabled, onStart, onStop }: TimerButtonProps) {
+function TimerButton({
+  type,
+  emoji,
+  activeEvent,
+  now,
+  disabled,
+  onStart,
+  onStop,
+  idleHasPopup,
+  idleExpanded,
+}: TimerButtonProps) {
   const { label } = eventColor(type)
   const isActive = activeEvent !== undefined
+  const hasPopup = !isActive && idleHasPopup === true
 
   const elapsed = isActive
     ? formatStopwatch(now - new Date(activeEvent.start_time).getTime())
@@ -145,6 +172,8 @@ function TimerButton({ type, emoji, activeEvent, now, disabled, onStart, onStop 
       surfaceClass={isActive ? ACTIVE_SURFACE_BY_TYPE[type] : IDLE_CIRCLE_CLASSES}
       disabled={disabled}
       ariaPressed={isActive}
+      ariaHasPopup={hasPopup}
+      ariaExpanded={hasPopup ? idleExpanded : undefined}
       onClick={() => (isActive ? onStop(activeEvent.id) : onStart())}
     >
       {isActive ? (
@@ -160,11 +189,101 @@ function TimerButton({ type, emoji, activeEvent, now, disabled, onStart, onStop 
   )
 }
 
+interface FeedingChoiceMenuProps {
+  disabled: boolean
+  onSelect: (choice: FeedingChoice) => void
+}
+
+/**
+ * The breast/bottle quick-pick shown above the feeding button. One tap here
+ * starts the feeding timer with the matching `metadata`, keeping logging to two
+ * taps total. A hint recalls the last breastfed side so parents can alternate.
+ */
+function FeedingChoiceMenu({ disabled, onSelect }: FeedingChoiceMenuProps) {
+  const lastSide = readLastBreastSide()
+
+  return (
+    <div
+      role="menu"
+      aria-label="בחירת אופן האכלה"
+      className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 flex-col items-stretch gap-1 rounded-2xl border border-neutral-200 bg-neutral-0 p-2 shadow-md"
+    >
+      {lastSide && (
+        <p className="px-1 pb-0.5 text-center text-xs text-neutral-500">
+          צד אחרון: {breastSideLabel(lastSide)}
+        </p>
+      )}
+      {FEEDING_CHOICES.map((choice) => (
+        <button
+          key={choice.id}
+          type="button"
+          role="menuitem"
+          onClick={() => onSelect(choice)}
+          disabled={disabled}
+          className="flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium text-neutral-700 transition-transform duration-fast active:scale-95 hover:bg-feeding-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-feeding-500 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <span aria-hidden="true" className="text-xl">
+            {choice.emoji}
+          </span>
+          {choice.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+interface FeedingAmountMenuProps {
+  disabled: boolean
+  onSelect: (amountMl: number | null) => void
+}
+
+/**
+ * A scrollable millilitre picker shown when a bottle feed is stopped, so the
+ * parent can record how much the baby drank. "דלג" stops the feed without an
+ * amount - the amount is optional, keeping the fast path free of a form.
+ */
+function FeedingAmountMenu({ disabled, onSelect }: FeedingAmountMenuProps) {
+  return (
+    <div
+      role="menu"
+      aria-label="בחירת כמות בקבוק"
+      className="absolute bottom-full left-1/2 mb-2 flex w-28 -translate-x-1/2 flex-col items-stretch gap-1 rounded-2xl border border-neutral-200 bg-neutral-0 p-2 shadow-md"
+    >
+      <p className="px-1 pb-0.5 text-center text-xs text-neutral-500">כמה שתה?</p>
+      <div className="flex max-h-44 flex-col gap-1 overflow-y-auto">
+        {BOTTLE_AMOUNT_OPTIONS_ML.map((amountMl) => (
+          <button
+            key={amountMl}
+            type="button"
+            role="menuitem"
+            onClick={() => onSelect(amountMl)}
+            disabled={disabled}
+            className="rounded-xl px-3 py-2 text-center text-sm font-medium tabular-nums text-neutral-700 transition-transform duration-fast active:scale-95 hover:bg-feeding-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-feeding-500 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {formatMilliliters(amountMl)}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => onSelect(null)}
+        disabled={disabled}
+        className="rounded-xl px-3 py-2 text-center text-sm font-medium text-neutral-500 transition-transform duration-fast active:scale-95 hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-feeding-500 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        דלג
+      </button>
+    </div>
+  )
+}
+
 export function QuickLogButtons({ childId, events }: QuickLogButtonsProps) {
   const logMutation = useLogImmediateEvent(childId)
   const startTimerMutation = useStartTimerEvent(childId)
   const stopTimerMutation = useStopTimerEvent(childId)
   const [isMoodOpen, setIsMoodOpen] = useState(false)
+  const [isFeedingOpen, setIsFeedingOpen] = useState(false)
+  const [isAmountOpen, setIsAmountOpen] = useState(false)
   const [confirmedType, setConfirmedType] = useState<EventType | null>(null)
   const confirmationTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -222,12 +341,50 @@ export function QuickLogButtons({ childId, events }: QuickLogButtonsProps) {
     handleLog('mood', { mood_level: level })
   }
 
-  function handleStartTimer(type: TimerEventType) {
-    startTimerMutation.mutate({ type })
+  function handleStartTimer(type: TimerEventType, metadata?: Record<string, unknown>) {
+    startTimerMutation.mutate({ type, metadata })
+  }
+
+  function handleFeedingSelect(choice: FeedingChoice) {
+    setIsFeedingOpen(false)
+    if (choice.side) writeLastBreastSide(choice.side)
+    handleStartTimer('feeding', choice.metadata)
   }
 
   function handleStopTimer(type: TimerEventType, eventId: string) {
     stopTimerMutation.mutate({ eventId }, { onSuccess: () => showConfirmation(type) })
+  }
+
+  const feedingEvent = activeTimers.get('feeding')
+  const isBottleFeeding =
+    (feedingEvent?.metadata as FeedingMetadata | null)?.feeding_type === 'bottle'
+
+  /**
+   * Stops the running feeding. A bottle first opens the amount picker (the
+   * amount is only known once the feed ends); anything else stops immediately.
+   */
+  function handleFeedingStop(eventId: string) {
+    if (isBottleFeeding) {
+      setIsAmountOpen(true)
+      return
+    }
+    handleStopTimer('feeding', eventId)
+  }
+
+  /** Records the chosen bottle amount (or none, when skipped) and stops the feed. */
+  function handleFeedingAmountSelect(amountMl: number | null) {
+    setIsAmountOpen(false)
+    if (!feedingEvent) return
+
+    const metadata =
+      amountMl === null
+        ? undefined
+        : { ...feedingEvent.metadata, amount: amountMl }
+
+    stopTimerMutation.mutate(
+      { eventId: feedingEvent.id, metadata },
+      { onSuccess: () => showConfirmation('feeding') },
+    )
   }
 
   const isPending =
@@ -250,15 +407,24 @@ export function QuickLogButtons({ childId, events }: QuickLogButtonsProps) {
         )}
 
         <div className="flex items-start justify-center gap-3">
-          <TimerButton
-            type="feeding"
-            emoji="🍼"
-            activeEvent={activeTimers.get('feeding')}
-            now={now}
-            disabled={isPending}
-            onStart={() => handleStartTimer('feeding')}
-            onStop={(eventId) => handleStopTimer('feeding', eventId)}
-          />
+          <div className="relative flex flex-col items-center">
+            {isFeedingOpen && <FeedingChoiceMenu disabled={isPending} onSelect={handleFeedingSelect} />}
+            {isAmountOpen && (
+              <FeedingAmountMenu disabled={isPending} onSelect={handleFeedingAmountSelect} />
+            )}
+
+            <TimerButton
+              type="feeding"
+              emoji="🍼"
+              activeEvent={feedingEvent}
+              now={now}
+              disabled={isPending}
+              idleHasPopup
+              idleExpanded={isFeedingOpen}
+              onStart={() => setIsFeedingOpen((open) => !open)}
+              onStop={handleFeedingStop}
+            />
+          </div>
 
           <TimerButton
             type="sleep"

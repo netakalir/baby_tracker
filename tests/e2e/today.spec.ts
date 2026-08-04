@@ -72,23 +72,68 @@ test.describe('Today screen - start/stop timers', () => {
   // Sleep and feeding are start/stop timers: tapping "start" opens a running
   // event (drawn as an in-progress arc), and tapping the same button "stops" it.
 
-  test('feeding is started and stopped from one toggling button', async ({ page, factory }) => {
+  test('a bottle feeding is started and stopped through the choice menu', async ({
+    page,
+    factory,
+  }) => {
     const user = await factory.createUser()
     await factory.seedFamilyWithChild(user, { childName: 'עומר' })
 
     await signIn(page, user)
     await expect(page).toHaveURL(/\/today$/)
 
-    // Start: the button toggles to "stop" and a running feeding arc appears.
+    // Start now opens a breast/bottle menu rather than logging directly.
     await page.getByRole('button', { name: 'התחלת האכלה' }).click()
+    const feedingMenu = page.getByRole('menu', { name: 'בחירת אופן האכלה' })
+    await expect(feedingMenu).toBeVisible()
+
+    // Picking "bottle" starts the timer: the button toggles to "stop".
+    await feedingMenu.getByRole('menuitem', { name: 'בקבוק' }).click()
+    await expect(feedingMenu).toBeHidden()
     const stopButton = page.getByRole('button', { name: 'עצירת האכלה' })
     await expect(stopButton).toBeVisible()
-    await expect(page.getByRole('img', { name: /האכלה מ-.*עדיין בתהליך/ })).toBeVisible()
+    await expect(page.getByRole('img', { name: /האכלה · בקבוק מ-.*עדיין בתהליך/ })).toBeVisible()
 
-    // Stop: a confirmation shows and the button toggles back to "start".
+    // Stopping a bottle opens the amount picker rather than ending immediately -
+    // the amount is only known once the feed is over.
     await stopButton.click()
+    const amountMenu = page.getByRole('menu', { name: 'בחירת כמות בקבוק' })
+    await expect(amountMenu).toBeVisible()
+
+    // Picking an amount stops the feed and records it on the event's label.
+    await amountMenu.getByRole('menuitem', { name: '120 מ״ל' }).click()
+    await expect(amountMenu).toBeHidden()
     await expect(page.getByRole('status')).toHaveText('נרשמה האכלה')
     await expect(page.getByRole('button', { name: 'התחלת האכלה' })).toBeVisible()
+    await expect(page.getByRole('img', { name: /האכלה · בקבוק · 120 מ״ל/ })).toBeVisible()
+  })
+
+  test('a breastfeed is drawn as one feeding arc and labels its side', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'תמר' })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    await page.getByRole('button', { name: 'התחלת האכלה' }).click()
+    const feedingMenu = page.getByRole('menu', { name: 'בחירת אופן האכלה' })
+    await feedingMenu.getByRole('menuitem', { name: 'הנקה ימין' }).click()
+
+    // The running feeding arc appears (still one "feeding" event, one color),
+    // and its label carries the breast/side detail from the event metadata -
+    // proof the split was persisted without a new event type.
+    await expect(page.getByRole('button', { name: 'עצירת האכלה' })).toBeVisible()
+    await expect(
+      page.getByRole('img', { name: /האכלה · הנקה · ימין מ-.*עדיין בתהליך/ }),
+    ).toBeVisible()
+
+    // The "last side" hint reflects the choice on the next open.
+    await page.getByRole('button', { name: 'עצירת האכלה' }).click()
+    await page.getByRole('button', { name: 'התחלת האכלה' }).click()
+    await expect(feedingMenu.getByText('צד אחרון: ימין')).toBeVisible()
   })
 
   test('a running feeding timer resumes as "stop" after a reload', async ({ page, factory }) => {
