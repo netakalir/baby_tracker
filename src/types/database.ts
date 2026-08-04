@@ -49,6 +49,13 @@ export interface Child {
   family_id: string
   name: string
   birth_date: string
+  /**
+   * Per-child day boundary ('HH:MM[:SS]'), default '00:00'. Decides which events
+   * count as "today" for this child. Stored here (not per-user/per-family) because
+   * it is a fact about the baby's routine — see the CLAUDE.md timezone principle.
+   * Not applied to the clock yet (deferred "apply" layer).
+   */
+  day_start: string
   created_at: string
 }
 
@@ -119,15 +126,15 @@ export type UserPreferencesUpsert = Pick<
 
 /**
  * Per-family settings (family_settings migrations).
- * Shared across the family; `day_start` is a 'HH:MM[:SS]' time-of-day string
- * applied client-side in Israel local time (see CLAUDE.md timezone principle).
- * It stays family-scoped because it is an aggregation boundary feeding shared,
- * server-computed rollups (daily summaries, AI Insights) — unlike `units`.
+ *
+ * Deliberately empty placeholder: `units` moved to user_preferences (per-user)
+ * and `day_start` moved to children (per-child), leaving no genuinely per-family
+ * setting. The table is kept (not dropped) as a home for a future family-scoped
+ * setting, so this interface currently holds only its key + audit column.
  */
 export interface FamilySettings {
   family_id: string
-  day_start: string
   updated_at: string
 }
 
-export type FamilySettingsUpsert = Pick<FamilySettings, 'family_id' | 'day_start'>
+export type FamilySettingsUpsert = Pick<FamilySettings, 'family_id'>

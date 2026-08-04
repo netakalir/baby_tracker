@@ -8,28 +8,23 @@ import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
 import type {
   AppLanguage,
   AppTheme,
-  FamilySettings,
-  FamilySettingsUpsert,
   MeasurementUnit,
   UserPreferences,
   UserPreferencesUpsert,
 } from '../../types/database'
 import { useAuth } from '../auth/useAuth'
-import { useOnboardingStatus } from '../onboarding/useOnboardingStatus'
 import { SettingsHeader } from './SettingsHeader'
 
 /**
- * Defaults that mirror the DB column defaults (see the user_preferences /
- * family_settings migrations). Used when no row exists yet, so a first-time
- * user still sees a sensible, non-empty selection before their first save.
+ * Defaults that mirror the user_preferences DB column defaults. Used when no row
+ * exists yet, so a first-time user still sees a sensible, non-empty selection
+ * before their first save.
  */
 const DEFAULT_LANGUAGE: AppLanguage = 'he'
 const DEFAULT_THEME: AppTheme = 'system'
 const DEFAULT_UNITS: MeasurementUnit = 'ml'
-const DEFAULT_DAY_START = '00:00'
 
 const userPreferencesKey = (userId: string): [string, string] => ['user-preferences', userId]
-const familySettingsKey = (familyId: string): [string, string] => ['family-settings', familyId]
 
 /** Reads the signed-in user's private preferences row, or null if none yet. */
 async function fetchUserPreferences(userId: string): Promise<UserPreferences | null> {
@@ -38,18 +33,6 @@ async function fetchUserPreferences(userId: string): Promise<UserPreferences | n
     .select('*')
     .eq('user_id', userId)
     .maybeSingle<UserPreferences>()
-
-  if (error) throw error
-  return data
-}
-
-/** Reads the family's shared settings row, or null if none has been created yet. */
-async function fetchFamilySettings(familyId: string): Promise<FamilySettings | null> {
-  const { data, error } = await supabase
-    .from('family_settings')
-    .select('*')
-    .eq('family_id', familyId)
-    .maybeSingle<FamilySettings>()
 
   if (error) throw error
   return data
@@ -66,22 +49,6 @@ async function upsertUserPreferences(row: UserPreferencesUpsert): Promise<UserPr
     .upsert(row, { onConflict: 'user_id' })
     .select()
     .single<UserPreferences>()
-
-  if (error) throw error
-  return data
-}
-
-/**
- * Upserts the family's shared settings. family_settings rows are created lazily,
- * so this handles the "no row yet" case by inserting on first save; upsert is
- * keyed by family_id.
- */
-async function upsertFamilySettings(row: FamilySettingsUpsert): Promise<FamilySettings> {
-  const { data, error } = await supabase
-    .from('family_settings')
-    .upsert(row, { onConflict: 'family_id' })
-    .select()
-    .single<FamilySettings>()
 
   if (error) throw error
   return data
@@ -175,36 +142,26 @@ function SettingSection({ title, note, children }: SettingSectionProps) {
   )
 }
 
-const FAMILY_SCOPE_NOTE = 'חל על כל המשפחה — שני ההורים רואים את אותו הערך.'
-
 /**
- * The "Display & language" settings sub-screen (spec §3.3). Controls split by
- * scope: language + theme + units are per-user (user_preferences), while
- * day-start is per-family (family_settings) and therefore shared. Units are
- * per-user because amounts are stored canonically in ml, so ml/oz is a lossless
- * per-viewer display choice (see the move_units_to_user_preferences migration).
+ * The "Display & language" settings sub-screen (spec §3.3). All three controls
+ * are per-user (user_preferences): language, theme, and measurement units. Units
+ * are per-user because amounts are stored canonically in ml, so ml/oz is a
+ * lossless per-viewer display choice (see the move_units migration and CLAUDE.md).
  *
  * Note: this screen only stores and reflects the preferences. Live i18n / RTL
  * switching, applying the theme, and converting amounts by the chosen unit are a
- * later layer (spec §5) — not wired here.
+ * later layer (spec §5) — not wired here. The day-boundary (day_start) is a
+ * per-child setting and is intentionally NOT exposed here (deferred).
  */
 export function DisplayScreen() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const userId = user?.id
-  const onboarding = useOnboardingStatus()
-  const familyId = onboarding.data?.familyId ?? null
 
   const preferencesQuery = useQuery({
     queryKey: userPreferencesKey(userId ?? 'anonymous'),
     queryFn: () => fetchUserPreferences(userId!),
     enabled: Boolean(userId),
-  })
-
-  const familySettingsQuery = useQuery({
-    queryKey: familySettingsKey(familyId ?? 'none'),
-    queryFn: () => fetchFamilySettings(familyId!),
-    enabled: Boolean(familyId),
   })
 
   const preferencesMutation = useMutation({
@@ -214,41 +171,19 @@ export function DisplayScreen() {
     },
   })
 
-  const familySettingsMutation = useMutation({
-    mutationFn: upsertFamilySettings,
-    onSuccess: (updated) => {
-      queryClient.setQueryData(familySettingsKey(updated.family_id), updated)
-    },
-  })
-
-  const isLoading =
-    onboarding.isPending ||
-    preferencesQuery.isPending ||
-    (Boolean(familyId) && familySettingsQuery.isPending)
-
-  if (isLoading) {
+  if (preferencesQuery.isPending) {
     return <LoadingScreen />
   }
 
-  if (onboarding.isError || preferencesQuery.isError || familySettingsQuery.isError) {
-    return (
-      <ErrorScreen
-        onRetry={() => {
-          void onboarding.refetch()
-          void preferencesQuery.refetch()
-          void familySettingsQuery.refetch()
-        }}
-      />
-    )
+  if (preferencesQuery.isError) {
+    return <ErrorScreen onRetry={() => void preferencesQuery.refetch()} />
   }
 
   const preferences = preferencesQuery.data
-  const familySettings = familySettingsQuery.data
 
   const language = preferences?.language ?? DEFAULT_LANGUAGE
   const theme = preferences?.theme ?? DEFAULT_THEME
   const units = preferences?.units ?? DEFAULT_UNITS
-  const dayStart = (familySettings?.day_start ?? DEFAULT_DAY_START).slice(0, 5)
 
   /** Builds the full user_preferences row from current values, overriding one field. */
   const savePreferences = (
@@ -267,27 +202,16 @@ export function DisplayScreen() {
     })
   }
 
-  /** Builds the full family_settings row from current values, overriding one field. */
-  const saveFamilySettings = (patch: Partial<Pick<FamilySettings, 'day_start'>>) => {
-    if (!familyId) return
-    familySettingsMutation.mutate({
-      family_id: familyId,
-      day_start: patch.day_start ?? dayStart,
-    })
-  }
-
-  const mutationError = preferencesMutation.error ?? familySettingsMutation.error
-  const isSaving = preferencesMutation.isPending || familySettingsMutation.isPending
-  const familyControlsDisabled = !familyId || isSaving
+  const isSaving = preferencesMutation.isPending
 
   return (
     <div className="min-h-screen bg-neutral-50 px-5 pb-16 pt-6">
       <div className="mx-auto w-full max-w-sm">
         <SettingsHeader title="תצוגה ושפה" backTo="/settings" />
 
-        {mutationError ? (
+        {preferencesMutation.error ? (
           <div className="mt-6">
-            <Banner message={toFriendlyDbErrorMessage(mutationError)} variant="error" />
+            <Banner message={toFriendlyDbErrorMessage(preferencesMutation.error)} variant="error" />
           </div>
         ) : null}
 
@@ -319,17 +243,6 @@ export function DisplayScreen() {
               value={units}
               disabled={isSaving}
               onChange={(value) => savePreferences({ units: value })}
-            />
-          </SettingSection>
-
-          <SettingSection title="תחילת היום" note={FAMILY_SCOPE_NOTE}>
-            <input
-              type="time"
-              aria-label="שעת תחילת היום"
-              value={dayStart}
-              disabled={familyControlsDisabled}
-              onChange={(event) => saveFamilySettings({ day_start: event.target.value })}
-              className="w-full rounded-md border border-neutral-200 bg-neutral-0 px-3 py-2 text-sm text-neutral-900 transition-colors duration-fast focus:border-brand-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
             />
           </SettingSection>
         </div>
