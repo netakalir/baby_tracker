@@ -58,3 +58,43 @@ export interface FamilyInvite {
 }
 
 export type FamilyInviteInsert = Pick<FamilyInvite, 'family_id' | 'invited_by' | 'expires_at'>
+
+export type AppLanguage = 'he' | 'en'
+
+export type AppTheme = 'light' | 'dark' | 'system'
+
+/**
+ * Per-user settings (supabase/migrations/20260803000000_user_preferences.sql).
+ * One row per auth user; never shared with the other parent.
+ */
+export interface UserPreferences {
+  user_id: string
+  display_name: string | null
+  language: AppLanguage
+  theme: AppTheme
+  notif_feeding: boolean
+  notif_sleep: boolean
+  notif_daily_summary: boolean
+  updated_at: string
+}
+
+export type UserPreferencesUpsert = Pick<
+  UserPreferences,
+  'user_id' | 'display_name' | 'language' | 'theme' | 'notif_feeding' | 'notif_sleep' | 'notif_daily_summary'
+>
+
+export type MeasurementUnit = 'ml' | 'oz'
+
+/**
+ * Per-family settings (supabase/migrations/20260803000001_family_settings.sql).
+ * Shared across the family; `day_start` is a 'HH:MM[:SS]' time-of-day string
+ * applied client-side in Israel local time (see CLAUDE.md timezone principle).
+ */
+export interface FamilySettings {
+  family_id: string
+  units: MeasurementUnit
+  day_start: string
+  updated_at: string
+}
+
+export type FamilySettingsUpsert = Pick<FamilySettings, 'family_id' | 'units' | 'day_start'>
