@@ -51,6 +51,7 @@ Links a user (managed by Supabase Auth) to a family.
 | family_id | uuid (FK -> families) |
 | name | text |
 | birth_date | date |
+| day_start | time (default '00:00') — per-child day boundary, see timezone principle below |
 | created_at | timestamp |
 
 ### `events`
@@ -85,7 +86,17 @@ RLS note: only existing family members can create an invite for their family. An
 
 **Current product assumption (MVP)**: a user belongs to exactly one family. Multi-family membership is not supported yet.
 
-**Timezone principle**: all `timestamp` columns are stored in UTC (the database default). Any logic that determines "what counts as today" (including the midnight day-boundary rule for events) is computed client-side, explicitly converted to Israel local time - never derived from raw UTC.
+**Timezone & day-boundary principle** (revised Aug 2026 — see reasoning below):
+- All `timestamp` columns are stored in UTC (the database default). This never changes.
+- The **wall clock** (how an instant is shown, and which local calendar day it falls on) is derived from the **device timezone** — whatever zone the viewing phone is set to — computed client-side, never from raw UTC. This replaces the earlier "always convert to Israel local time" rule.
+- The **day boundary** ("what counts as today") is the child's local calendar day, offset by a per-child **`day_start`** setting (default midnight). `day_start` lives on `children` (per-child), not per-user or per-family.
+
+**Why this scoping** (decided with Netanel, Aug 2026, after researching the category leader Huckleberry + timestamp best practices):
+- **Device timezone, not a stored per-child zone**: "where the baby is *right now*" = where the logging phone is right now. Every major baby app (Huckleberry et al.) follows the device zone and adjusts immediately on travel; a stored per-child zone would show the wrong wall clock until manually updated. Storing UTC keeps aggregations stable across zone changes; only presentation converts.
+- **`day_start` is per-child**: it is an aggregation boundary (it decides which events fall into "today" for summaries/Insights), so it fails the lossless test that made *units* per-user. It belongs to the baby's routine, not a parent's preference — Huckleberry sets it on the Child Profile. Per-child is also required for multi-child families, where a newborn and a toddler genuinely have different "days".
+- Consequence: there is no genuinely per-family setting. `units` is per-user (`user_preferences`); `day_start` is per-child (`children`). The short-lived `family_settings` table is therefore removed.
+
+Applying `day_start` and switching the hardcoded `Asia/Jerusalem` to the device zone is the day-boundary "apply" layer (tracked as settings debt in PROGRESS.md); the scoping above is the committed target.
 
 ## RLS Policies (must be defined before any frontend code)
 Rule: a user can view/edit only events belonging to children that belong to a family they are a member of (via `family_members`).
@@ -118,4 +129,3 @@ Recommended build order:
 ## How to Work With Claude Code on This Project
 - Every task given to Claude Code should be small and focused (one table, one RLS policy, one component) - not "build everything"
 - After each task, verify it actually works (e.g., create an event from 2 different users in the same family, and confirm both see it) before moving to the next task
-- **Keep the NotebookLM source in sync**: whenever `PROGRESS.md` is updated at the close of a task, also refresh the Google Drive doc `baby-tracker – project state (for NotebookLM)` (Drive file id `1I3kMwcaj-bOgFFaTyohxZl07BGvTSgzT3iuUABpKdJE`, in the "baby tracker" folder) with the same state, via the Google Drive connector. This is a plain-language mirror of `PROGRESS.md` that Netanel adds as a source in NotebookLM and refreshes with "Sync with Google Drive". GitHub/`PROGRESS.md` remains the single source of truth; the Drive doc is a derived copy, so overwrite it rather than editing it by hand.

@@ -29,7 +29,10 @@ test.describe('authentication and onboarding', () => {
     await expect(page.getByRole('heading', { name: 'נועה' })).toBeVisible()
     await expect(page.getByRole('img', { name: 'שעון 24 שעות של אירועי היום' })).toBeVisible()
 
-    // Sign-out returns to the auth screen.
+    // Sign-out lives in the Settings hub (reached from the Today header gear) and
+    // returns to the auth screen.
+    await page.getByRole('button', { name: 'הגדרות' }).click()
+    await expect(page).toHaveURL(/\/settings$/)
     await page.getByRole('button', { name: 'התנתקות' }).click()
     await expect(page).toHaveURL(/\/auth$/)
   })

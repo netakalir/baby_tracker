@@ -49,6 +49,13 @@ export interface Child {
   family_id: string
   name: string
   birth_date: string
+  /**
+   * Per-child day boundary ('HH:MM[:SS]'), default '00:00'. Decides which events
+   * count as "today" for this child. Stored here (not per-user/per-family) because
+   * it is a fact about the baby's routine — see the CLAUDE.md timezone principle.
+   * Not applied to the clock yet (deferred "apply" layer).
+   */
+  day_start: string
   created_at: string
 }
 
@@ -82,15 +89,23 @@ export type AppLanguage = 'he' | 'en'
 
 export type AppTheme = 'light' | 'dark' | 'system'
 
+export type MeasurementUnit = 'ml' | 'oz'
+
 /**
- * Per-user settings (supabase/migrations/20260803000000_user_preferences.sql).
+ * Per-user settings (user_preferences migrations).
  * One row per auth user; never shared with the other parent.
+ *
+ * `units` lives here (not in family_settings): amounts are stored canonically
+ * in millilitres, so ml <-> oz is a lossless per-viewer display choice, exactly
+ * like the UTC-store / local-display timezone principle (see the
+ * 20260804000000_move_units_to_user_preferences migration).
  */
 export interface UserPreferences {
   user_id: string
   display_name: string | null
   language: AppLanguage
   theme: AppTheme
+  units: MeasurementUnit
   notif_feeding: boolean
   notif_sleep: boolean
   notif_daily_summary: boolean
@@ -99,21 +114,27 @@ export interface UserPreferences {
 
 export type UserPreferencesUpsert = Pick<
   UserPreferences,
-  'user_id' | 'display_name' | 'language' | 'theme' | 'notif_feeding' | 'notif_sleep' | 'notif_daily_summary'
+  | 'user_id'
+  | 'display_name'
+  | 'language'
+  | 'theme'
+  | 'units'
+  | 'notif_feeding'
+  | 'notif_sleep'
+  | 'notif_daily_summary'
 >
 
-export type MeasurementUnit = 'ml' | 'oz'
-
 /**
- * Per-family settings (supabase/migrations/20260803000001_family_settings.sql).
- * Shared across the family; `day_start` is a 'HH:MM[:SS]' time-of-day string
- * applied client-side in Israel local time (see CLAUDE.md timezone principle).
+ * Per-family settings (family_settings migrations).
+ *
+ * Deliberately empty placeholder: `units` moved to user_preferences (per-user)
+ * and `day_start` moved to children (per-child), leaving no genuinely per-family
+ * setting. The table is kept (not dropped) as a home for a future family-scoped
+ * setting, so this interface currently holds only its key + audit column.
  */
 export interface FamilySettings {
   family_id: string
-  units: MeasurementUnit
-  day_start: string
   updated_at: string
 }
 
-export type FamilySettingsUpsert = Pick<FamilySettings, 'family_id' | 'units' | 'day_start'>
+export type FamilySettingsUpsert = Pick<FamilySettings, 'family_id'>

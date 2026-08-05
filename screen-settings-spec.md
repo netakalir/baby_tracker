@@ -68,12 +68,22 @@ pattern the user chose over a dedicated nav tab.
 |---|---|---|---|
 | Language (Hebrew / English) + RTL | **per-user** | `user_preferences.language` | Drives text direction |
 | Theme (light / dark / system) | **per-user** | `user_preferences.theme` | Follows the design system |
-| Measurement units (ml / oz) | **per-family** | `family_settings.units` | Must match for both parents |
-| Day-start time | **per-family** | `family_settings.day_start` | Defines the midnight/day boundary rule used by Today (computed in Israel local time — see CLAUDE.md timezone principle) |
+| Measurement units (ml / oz) | **per-user** | `user_preferences.units` | Lossless display choice — see rationale |
+| Day-start time | **per-child** | `children.day_start` | Per-child day boundary. **Not exposed on this screen in MVP** (apply deferred) — see `settings-scoping-decisions.md` |
 
-Rationale for the per-family items: if one parent saw ml and the other oz on the
-same feeding, or "today" started at a different hour per parent, the shared Today
-clock would look different to each of them.
+Rationale — **units are per-user**: feeding amounts are stored canonically in
+millilitres (`events.metadata.amount`), so ml ⇄ oz is a lossless conversion of the
+*same* physical quantity — exactly like the UTC-store / local-display timezone
+principle. Each parent can view (and input) in their own unit without ever making the
+shared number contradictory, so it is personal chrome, not shared data.
+
+Rationale — **day-start is per-child**: it is not a transform of a single value but an
+*aggregation boundary* deciding which events fall into "today". It is a fact about the
+baby's routine (not a parent preference), matches the category leader (Huckleberry
+sets it on the Child Profile), and is required for multi-child families. It therefore
+lives on `children`, not per-user or per-family. Full reasoning, debate, and sources:
+`settings-scoping-decisions.md`. The wall-clock timezone follows the **device** (not a
+stored value) — see the CLAUDE.md timezone principle.
 
 ### 3.4 🔔 Notifications  (per-user, **preferences only in MVP**)
 
@@ -98,23 +108,30 @@ One row per user. RLS: a user can select/update **only their own** row.
 | display_name | text (nullable) | |
 | language | text | `'he'` \| `'en'`, default `'he'` |
 | theme | text | `'light'` \| `'dark'` \| `'system'`, default `'system'` |
+| units | text | `'ml'` \| `'oz'`, default `'ml'` — personal display unit (amounts stored canonically in ml) |
 | notif_feeding | boolean | default false |
 | notif_sleep | boolean | default false |
 | notif_daily_summary | boolean | default false |
 | updated_at | timestamptz | |
 
-### 4.2 New table: `family_settings`  (per-family)
+### 4.2 Table: `family_settings`  (empty placeholder)
 
-**Decided:** a dedicated table keyed by `family_id` (one row per family), chosen over
-adding columns to `families` — gives room to grow family-level settings later without
-repeatedly altering the core `families` table.
+**Current state:** a deliberately **empty placeholder**, kept as a home for a future
+genuinely per-family setting. It was originally created for `units` + `day_start`, but
+both left (units → per-user, day_start → per-child), and it turned out there is **no
+genuinely per-family setting** yet.
 
 | Column | Type | Notes |
 |---|---|---|
 | family_id | uuid (PK, FK → families) | one row per family |
-| units | text | `'ml'` \| `'oz'`, default `'ml'` |
-| day_start | time | default `'00:00'`; the day boundary used by Today (applied in Israel local time — see CLAUDE.md timezone principle) |
 | updated_at | timestamptz | |
+
+> **Scope revisions** (full reasoning + sources in `settings-scoping-decisions.md`):
+> - `units` → moved to `user_preferences` (per-user), migration
+>   `20260804000000_move_units_to_user_preferences`.
+> - `day_start` → moved to `children` (per-child), migration
+>   `20260804000001_day_start_to_children`.
+> - The table is **kept** (not dropped) as a placeholder (decided).
 
 The row is created (with defaults) when the family is created, or lazily on first read.
 
