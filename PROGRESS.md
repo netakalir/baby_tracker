@@ -98,7 +98,7 @@
 - שכבת נתונים: `api.ts`, `useTodayEvents.ts`.
 - **בדיקות E2E:** `today.spec.ts`, `today-realtime.spec.ts`.
 
-**הערה — משימה 5 עדיין לא מומשה:** `EstimateBanners.tsx` קיים אך הוא placeholder בלבד — שני הכרטיסים מציגים "עוד אין מספיק נתונים". חישוב הצפי האמיתי (ממוצע אישי + נורמות גיל / wake window, דרך ה-Edge Function) הוא משימה נפרדת שטרם נבנתה.
+**משימה 5 הושלמה ומוזגה ל-`main`** (squash, 2026-08-06): `EstimateBanners.tsx` מחובר לפונקציית ה-Edge `estimates` (JWT של הקורא + RLS, ללא service_role) שמחשבת צפי האכלה (ממוצע אישי, סף 3 האכלות) וצפי שינה (wake window לפי גיל). טבלת נורמות-הגיל וצורת ה-wire משותפות עם הפרונטאנד דרך `estimate-contract.md`. הבנרים מציגים Loading / "אין מספיק נתונים" / צפי מוכן; המפתח מבוסס device-day + `day_start`.
 
 ---
 
@@ -114,7 +114,11 @@
 
 ## מה בתהליך כרגע 🔄
 
-משימות 2 ו-3 נסגרו ומוזגו ל-`main` (כולל הקדמה חלקית של טיימר משימה 4 ו-Realtime משימה 8). פיצול ההאכלה (שלב 6) מוזג ל-`main` (PR #4). **מסך ההגדרות (משימה 12, שלב 7 למטה) הושלם ומוזג ל-`main` (PR #6)**, כולל גמר החלטת ה-scoping: `units` → per-user (`user_preferences`), `day_start` → per-child (`children`), timezone → אזור-המכשיר, `family_settings` → placeholder ריק (אין הגדרה שהיא באמת per-family). התיעוד המלא של ההחלטה: `settings-scoping-decisions.md`. סוויטת E2E ירוקה (19/19). הצעד הבא: **משימה 5** — בנרי צפי שינה/האכלה עם נתונים אמיתיים, או **משימה B** — Edge Function ל-AI Insights.
+משימות 2 ו-3 נסגרו ומוזגו ל-`main` (כולל הקדמה חלקית של טיימר משימה 4 ו-Realtime משימה 8). פיצול ההאכלה (שלב 6) מוזג ל-`main` (PR #4). **מסך ההגדרות (משימה 12, שלב 7 למטה) הושלם ומוזג ל-`main` (PR #6)**, כולל גמר החלטת ה-scoping: `units` → per-user (`user_preferences`), `day_start` → per-child (`children`), timezone → אזור-המכשיר, `family_settings` → placeholder ריק (אין הגדרה שהיא באמת per-family). התיעוד המלא של ההחלטה: `settings-scoping-decisions.md`.
+
+**עדכון 2026-08-06 — משימה 5 + תשתית ההגדרות מוזגו ל-`main`** (squash `feat/estimates-settings-integration`): (א) בנרי צפי האכלה/שינה חיים מול פונקציית `estimates`; (ב) ארבעת תתי-מסכי ההגדרות מחוברים בפועל (profile / baby & family / display / notifications) עם `api.ts`+hooks (חוב א' מגל 2 נסגר); (ג) RPC `family_members_with_identity` להצגת שם/אימייל אמיתי של חברי משפחה (חוב ב' נסגר); (ד) מחיקת חשבון אמיתית דרך פונקציית `delete-user` (חוב ד' נסגר); (ה) טסטי E2E לארבעת תתי-המסכים + בידוד זהות חברי משפחה (חוב ג' נסגר). תוקן גם באג אמיתי: שמירת פרטי תינוק לא הציגה באנר אישור.
+
+**עדיין פתוח (נדחה במפורש):** שכבת ה-apply — החלת ערכת נושא/שפה(i18n+RTL)/יחידות (נשמרים אך לא מיושמים) ויישום `day_start`/אזור-המכשיר על השעון (ראה "חוב שכבת ה-apply" למטה).
 
 ---
 
