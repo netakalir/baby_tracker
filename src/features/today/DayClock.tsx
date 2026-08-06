@@ -6,12 +6,19 @@ import { minutesToAngle, pointOnCircle, strokeArcPath, type Point } from './cloc
 import { RING_ORDER, RING_STROKE, RINGS, ringRadius } from './clock/rings'
 import { formatDuration, formatIsraelTime } from './clock/timeFormat'
 import { feedingDetailLabel } from './feedingChoice'
+import { parseDayStartMinutes } from './todayDate'
 
 interface DayClockProps {
   /** Events for the displayed day (from `src/types/database.ts`). */
   events: Event[]
-  /** The day being displayed, in Israel local terms (used for midnight-crossing math). */
+  /** The day being displayed, in device-local terms (used for boundary-crossing math). */
   date: Date
+  /**
+   * The child's `day_start` ('HH:MM', default '00:00'). The dial's top (minute 0)
+   * is this wall-clock time, so the ring spans the child's day rather than a
+   * fixed calendar midnight.
+   */
+  dayStart?: string
   /** Optional: called when an existing arc/marker is clicked. */
   onArcClick?: (event: Event) => void
 }
@@ -114,9 +121,13 @@ function ariaLabelFor({ event, segment, isOngoing }: Drawable): string {
   return `${label} מ-${from} עד ${to}, משך ${duration}`
 }
 
-export function DayClock({ events, date, onArcClick }: DayClockProps) {
+export function DayClock({ events, date, dayStart = '00:00', onArcClick }: DayClockProps) {
   // useId gives stable, collision-free ids so multiple clocks can coexist on a page.
   const idPrefix = useId().replace(/[^a-zA-Z0-9_-]/g, '')
+
+  // Minutes from midnight the dial's top represents; every hour label is offset
+  // by this so the wall-clock times stay correct when day_start is not midnight.
+  const dayStartMinutes = parseDayStartMinutes(dayStart)
 
   const { arcs, points } = useMemo(() => {
     // Recomputed whenever the event list changes (including via realtime), which
@@ -131,6 +142,7 @@ export function DayClock({ events, date, onArcClick }: DayClockProps) {
         event.start_time,
         isOngoing ? nowIso : event.end_time,
         date,
+        dayStart,
       )
       if (!segment) continue
       const drawable: Drawable = { event, segment, isOngoing }
@@ -139,7 +151,7 @@ export function DayClock({ events, date, onArcClick }: DayClockProps) {
     }
 
     return { arcs: arcList, points: pointList }
-  }, [events, date])
+  }, [events, date, dayStart])
 
   const isEmpty = arcs.length === 0 && points.length === 0
   const clickable = onArcClick !== undefined
@@ -262,6 +274,11 @@ export function DayClock({ events, date, onArcClick }: DayClockProps) {
             const angle = minutesToAngle(hour * 60)
             const isMajor = hour % 6 === 0
             const isLabelled = hour % 3 === 0
+            // Wall-clock hour at this tick: dial top is day_start, so each tick's
+            // label is offset by it (identical to the raw hour when day_start is
+            // midnight).
+            const wallHour = (hour + Math.floor(dayStartMinutes / 60)) % 24
+            const wallMinute = dayStartMinutes % 60
             const outer = pointOnCircle(CENTER, TICK_OUTER_RADIUS, angle)
             const inner = pointOnCircle(
               CENTER,
@@ -290,7 +307,11 @@ export function DayClock({ events, date, onArcClick }: DayClockProps) {
                     textAnchor="middle"
                     dominantBaseline="central"
                   >
-                    {hour === 0 ? '00:00' : `${hour}:00`}
+                    {wallMinute === 0
+                      ? wallHour === 0
+                        ? '00:00'
+                        : `${wallHour}:00`
+                      : `${String(wallHour).padStart(2, '0')}:${String(wallMinute).padStart(2, '0')}`}
                   </text>
                 )}
               </g>

@@ -385,6 +385,18 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# Account deletion ("leave only", settings spec §6). verify_jwt = true so the
+# platform rejects unauthenticated calls; the function additionally derives the
+# account to delete from the caller's own JWT (never the request body).
+[functions.delete-user]
+enabled = true
+verify_jwt = true
+
+[functions.estimates]
+enabled = true
+verify_jwt = true
+import_map = "./functions/estimates/deno.json"
+
 [analytics]
 enabled = true
 port = 54327

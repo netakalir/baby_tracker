@@ -1,4 +1,4 @@
-import { israelDayBounds } from '../../src/features/today/todayDate'
+import { deviceDayBounds } from '../../src/features/today/todayDate'
 import { expect, test } from '../support/fixtures'
 import { signIn } from '../support/pageActions'
 
@@ -65,6 +65,52 @@ test.describe('Today screen - quick logging', () => {
     await expect(page.getByRole('status')).toHaveText('נרשם מצב רוח')
     await expect(moodMenu).toBeHidden()
     await expect(page.getByRole('img', { name: /מצב רוח בשעה/ })).toBeVisible()
+  })
+})
+
+test.describe('Today screen - estimate banners', () => {
+  // The two cards below the clock ("next feeding" / "next sleep") render the
+  // contract states (estimate-contract.md §3) from the `useEstimates` query,
+  // which now calls the live `estimates` Edge Function. We seed a data shape that
+  // yields a fixed mix in one render — feeding `ready` with the personal basis
+  // (>= 3 feedings), sleep `not_enough_data` (no completed sleep) — so the Ready
+  // and Unavailable card designs are both exercised.
+
+  test('the estimate cards render a ready feeding and an unavailable sleep', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    const family = await factory.seedFamilyWithChild(user, { childName: 'עדי' })
+
+    // Three feedings inside today's window → personal-average feeding estimate.
+    // No completed sleep → sleep stays not_enough_data.
+    const dayStartMs = new Date(deviceDayBounds().startIso).getTime()
+    const base = Math.max(dayStartMs + 1_000, Date.now() - 6 * 60 * 60_000)
+    await factory.seedEvents(
+      user,
+      family.childId,
+      [0, 150, 300].map((offsetMin) => ({
+        type: 'feeding' as const,
+        start_time: new Date(base + offsetMin * 60_000).toISOString(),
+        end_time: new Date(base + (offsetMin + 15) * 60_000).toISOString(),
+      })),
+    )
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    // Both cards are always present by their fixed labels.
+    await expect(page.getByText('צפי האכלה הבאה')).toBeVisible()
+    await expect(page.getByText('צפי שינה הבאה')).toBeVisible()
+
+    // Ready (feeding): a device-timezone wall-clock estimate plus the personal
+    // basis wording, never a raw instant.
+    await expect(page.getByText(/^בסביבות \d/)).toBeVisible()
+    await expect(page.getByText('לפי הקצב של התינוק')).toBeVisible()
+
+    // Unavailable (sleep): the honest positive placeholder, not a red error.
+    await expect(page.getByText('עוד אין מספיק נתונים')).toBeVisible()
   })
 })
 
@@ -146,8 +192,8 @@ test.describe('Today screen - start/stop timers', () => {
     // never earlier than just after today's midnight, which keeps both true at
     // any time of day - including the minutes right after midnight, where a
     // fixed early-morning hour would still sit in the future.
-    const dayStart = new Date(israelDayBounds().startIso).getTime()
-    const feedingStart = Math.max(dayStart + 1_000, Date.now() - 30 * 60_000)
+    const dayStartMs = new Date(deviceDayBounds().startIso).getTime()
+    const feedingStart = Math.max(dayStartMs + 1_000, Date.now() - 30 * 60_000)
     await factory.seedEvents(user, family.childId, [
       { type: 'feeding', start_time: new Date(feedingStart).toISOString(), end_time: null },
     ])
@@ -184,12 +230,12 @@ test.describe('Today screen - start/stop timers', () => {
 
     // A sleep that started ~80 min before today's Israel-local midnight and ends
     // ~6h into today. Anchoring to the real day boundary keeps this DST-safe.
-    const dayStart = new Date(israelDayBounds().startIso).getTime()
+    const dayStartMs = new Date(deviceDayBounds().startIso).getTime()
     await factory.seedEvents(user, family.childId, [
       {
         type: 'sleep',
-        start_time: new Date(dayStart - 80 * 60_000).toISOString(),
-        end_time: new Date(dayStart + 370 * 60_000).toISOString(),
+        start_time: new Date(dayStartMs - 80 * 60_000).toISOString(),
+        end_time: new Date(dayStartMs + 370 * 60_000).toISOString(),
       },
     ])
 
@@ -199,5 +245,41 @@ test.describe('Today screen - start/stop timers', () => {
     // The event started yesterday, so a naive "start_time within today" query
     // would miss it; it must still render on today's clock (spec section 6).
     await expect(page.getByRole('img', { name: /שינה מ-/ })).toBeVisible()
+  })
+})
+
+test.describe('Today screen - per-child day boundary (day_start)', () => {
+  // "What counts as today" starts at the child's `day_start` (default midnight),
+  // in the device timezone. With a non-midnight day_start the window shifts, so
+  // an event logged just before that boundary belongs to the *previous* day and
+  // must not appear on today's clock, while one just after it does.
+
+  test("a non-midnight day_start excludes events before the child's day boundary", async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    // A 06:00 day boundary: the child's "today" runs from 06:00 to the next 06:00.
+    const family = await factory.seedFamilyWithChild(user, { childName: 'יעל', dayStart: '06:00' })
+
+    // Anchor to the actual day-window start the app computes for this day_start,
+    // so the test is correct at any time of day (DST-safe, boundary-relative).
+    const windowStartMs = new Date(deviceDayBounds(new Date(), '06:00').startIso).getTime()
+
+    // One diaper just BEFORE the 06:00 boundary (previous child-day -> excluded)
+    // and one mood just AFTER it, but still in the past (current day -> shown).
+    const beforeBoundary = new Date(windowStartMs - 30 * 60_000).toISOString()
+    const insideDay = new Date(Math.floor((windowStartMs + Date.now()) / 2)).toISOString()
+    await factory.seedEvents(user, family.childId, [
+      { type: 'diaper', start_time: beforeBoundary, end_time: null },
+      { type: 'mood', start_time: insideDay, end_time: null },
+    ])
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    // The in-window mood renders; the pre-boundary diaper is scoped out entirely.
+    await expect(page.getByRole('img', { name: /מצב רוח בשעה/ })).toBeVisible()
+    await expect(page.getByRole('img', { name: /החתלה/ })).toHaveCount(0)
   })
 })

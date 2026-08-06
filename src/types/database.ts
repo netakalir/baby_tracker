@@ -44,6 +44,22 @@ export interface FamilyMember {
 
 export type FamilyMemberInsert = Pick<FamilyMember, 'family_id' | 'user_id' | 'role'>
 
+/**
+ * A family member enriched with their real identity (display name + email),
+ * returned by the `family_members_with_identity` RPC. Plain RLS on
+ * `family_members` exposes only `user_id` + `role`; the SECURITY DEFINER RPC
+ * additionally joins `auth.users` and `user_preferences` so the other parent's
+ * name/email can be shown (see the RPC migration). `display_name` is null when
+ * that member has not set one yet.
+ */
+export interface FamilyMemberIdentity {
+  id: string
+  user_id: string
+  role: FamilyMemberRole
+  display_name: string | null
+  email: string | null
+}
+
 export interface Child {
   id: string
   family_id: string
@@ -67,7 +83,12 @@ export interface Event {
   type: EventType
   start_time: string
   end_time: string | null
-  created_by: string
+  /**
+   * The user who logged the event. Nullable because account deletion ("leave
+   * only", spec §6) relaxes this FK to `ON DELETE SET NULL`: the shared event
+   * survives the author's account deletion, just without an author link.
+   */
+  created_by: string | null
   metadata: Record<string, unknown> | null
   created_at: string
 }
@@ -75,7 +96,11 @@ export interface Event {
 export interface FamilyInvite {
   id: string
   family_id: string
-  invited_by: string
+  /**
+   * The user who created the invite. Nullable because account deletion relaxes
+   * this FK to `ON DELETE SET NULL` (see `created_by` on `Event`).
+   */
+  invited_by: string | null
   token: string
   created_at: string
   expires_at: string

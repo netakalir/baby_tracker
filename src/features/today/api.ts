@@ -1,6 +1,6 @@
 import { supabase } from '../../lib/supabase'
 import type { Event, EventType } from '../../types/database'
-import { israelDayBounds } from './todayDate'
+import { deviceDayBounds } from './todayDate'
 
 /**
  * Event types logged as a single instantaneous tap (no duration). These are
@@ -117,19 +117,20 @@ export async function stopTimerEvent(
 }
 
 /**
- * Fetches a child's events that *overlap* "today" in Israel local time, ordered
- * chronologically. RLS already scopes rows to the caller's family, so we filter
- * only by child and the Israel-local day window.
+ * Fetches a child's events that *overlap* "today" — the device-local child-day
+ * bounded by the child's `day_start` — ordered chronologically. RLS already
+ * scopes rows to the caller's family, so we filter only by child and the day
+ * window.
  *
  * Overlap (not just `start_time` within today) is required so an event that
- * crosses midnight - e.g. an overnight sleep that started yesterday and ends
- * this morning - is still returned and drawn on today's clock (spec section 6).
- * An event overlaps [startIso, endIso) when it starts before the day ends and
- * either ends after the day starts (duration events) or, for a point-in-time
- * event (no `end_time`), starts within the day.
+ * crosses the day boundary - e.g. an overnight sleep that started yesterday and
+ * ends this morning - is still returned and drawn on today's clock (spec
+ * section 6). An event overlaps [startIso, endIso) when it starts before the
+ * day ends and either ends after the day starts (duration events) or, for a
+ * point-in-time event (no `end_time`), starts within the day.
  */
-export async function fetchTodayEvents(childId: string): Promise<Event[]> {
-  const { startIso, endIso } = israelDayBounds()
+export async function fetchTodayEvents(childId: string, dayStart = '00:00'): Promise<Event[]> {
+  const { startIso, endIso } = deviceDayBounds(new Date(), dayStart)
 
   const { data, error } = await supabase
     .from('events')

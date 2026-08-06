@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
-import { todayEventsKey } from './useTodayEvents'
+import { todayEventsKeyPrefix } from './useTodayEvents'
 
 /**
  * Keeps a child's "today" events live across devices: subscribes to Postgres
@@ -17,8 +17,8 @@ import { todayEventsKey } from './useTodayEvents'
  * policy grants nothing, and no changes would ever arrive.
  *
  * Invalidation (rather than surgically patching the cache) is deliberate: it
- * re-runs the same Israel-local day-window query the initial fetch used, so a
- * cross-midnight or out-of-window row is handled by one source of truth.
+ * re-runs the same device-local child-day query the initial fetch used, so a
+ * cross-boundary or out-of-window row is handled by one source of truth.
  *
  * The channel is torn down on unmount and re-created when `childId` changes, so
  * no channels leak and StrictMode's double-mount does not leave a duplicate.
@@ -51,7 +51,7 @@ export function useTodayEventsRealtime(childId: string): void {
             filter: `child_id=eq.${childId}`,
           },
           () => {
-            void queryClient.invalidateQueries({ queryKey: todayEventsKey(childId) })
+            void queryClient.invalidateQueries({ queryKey: todayEventsKeyPrefix(childId) })
           },
         )
         .subscribe()

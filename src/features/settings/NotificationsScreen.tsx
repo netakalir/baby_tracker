@@ -1,11 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../../lib/supabase'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
 import type { UserPreferences, UserPreferencesUpsert } from '../../types/database'
 import { Banner } from '../../components/ui/Banner'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
 import { ErrorScreen } from '../../components/ui/ErrorScreen'
+import { useAuth } from '../auth/useAuth'
 import { SettingsHeader } from './SettingsHeader'
+import { useUpsertUserPreferences, useUserPreferences } from './useUserPreferences'
 
 /**
  * The three notification toggles are stored per-user in `user_preferences` but
@@ -39,71 +39,23 @@ const notificationToggles: readonly NotificationToggle[] = [
   },
 ]
 
-/** Preference defaults used until the user's own row exists in the database. */
-const defaultPreferences: UserPreferencesUpsert = {
-  user_id: '',
-  display_name: null,
-  language: 'he',
-  theme: 'system',
-  notif_feeding: false,
-  notif_sleep: false,
-  notif_daily_summary: false,
-}
-
-const userPreferencesKey = ['user-preferences'] as const
-
-/** Resolves the signed-in user's id, or throws if there is no session. */
-async function requireUserId(): Promise<string> {
-  const { data, error } = await supabase.auth.getUser()
-  if (error) throw error
-
-  const userId = data.user?.id
-  if (!userId) {
-    throw new Error('Cannot read notification preferences without an authenticated user')
-  }
-  return userId
-}
-
 /**
- * Reads the current user's preferences row. A missing row is not an error - the
- * row is created lazily on the first toggle - so it resolves to sensible
- * defaults keyed to the current user.
+ * Builds the full upsert row from the stored preferences (or the DB-matching
+ * defaults when no row exists yet), keyed to the current user. Sending the whole
+ * row means a notification toggle never clobbers a preference owned by another
+ * settings screen (display name / language / theme / units).
  */
-async function fetchUserPreferences(): Promise<UserPreferencesUpsert> {
-  const userId = await requireUserId()
-
-  const { data, error } = await supabase
-    .from('user_preferences')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle<UserPreferences>()
-
-  if (error) throw error
-  if (!data) return { ...defaultPreferences, user_id: userId }
-
+function toUpsertRow(userId: string, stored: UserPreferences | null): UserPreferencesUpsert {
   return {
-    user_id: data.user_id,
-    display_name: data.display_name,
-    language: data.language,
-    theme: data.theme,
-    notif_feeding: data.notif_feeding,
-    notif_sleep: data.notif_sleep,
-    notif_daily_summary: data.notif_daily_summary,
+    user_id: userId,
+    display_name: stored?.display_name ?? null,
+    language: stored?.language ?? 'he',
+    theme: stored?.theme ?? 'system',
+    units: stored?.units ?? 'ml',
+    notif_feeding: stored?.notif_feeding ?? false,
+    notif_sleep: stored?.notif_sleep ?? false,
+    notif_daily_summary: stored?.notif_daily_summary ?? false,
   }
-}
-
-/**
- * Persists the full preferences row via upsert keyed by `user_id`, so it creates
- * the row on the first change and updates it thereafter. The other (display /
- * language) fields are carried through untouched so a notification toggle never
- * clobbers a preference owned by another settings screen.
- */
-async function saveUserPreferences(next: UserPreferencesUpsert): Promise<void> {
-  const { error } = await supabase
-    .from('user_preferences')
-    .upsert(next, { onConflict: 'user_id' })
-
-  if (error) throw error
 }
 
 /**
@@ -112,26 +64,18 @@ async function saveUserPreferences(next: UserPreferencesUpsert): Promise<void> {
  * delivered yet.
  */
 export function NotificationsScreen() {
-  const queryClient = useQueryClient()
+  const { user } = useAuth()
+  const userId = user?.id
 
-  const preferencesQuery = useQuery({
-    queryKey: userPreferencesKey,
-    queryFn: fetchUserPreferences,
-  })
-
-  const saveMutation = useMutation<void, unknown, UserPreferencesUpsert>({
-    mutationFn: saveUserPreferences,
-    onSuccess: (_result, variables) => {
-      queryClient.setQueryData(userPreferencesKey, variables)
-    },
-  })
+  const preferencesQuery = useUserPreferences(userId)
+  const saveMutation = useUpsertUserPreferences()
 
   if (preferencesQuery.isPending) return <LoadingScreen />
   if (preferencesQuery.isError) {
     return <ErrorScreen onRetry={() => void preferencesQuery.refetch()} />
   }
 
-  const preferences = preferencesQuery.data
+  const preferences = toUpsertRow(userId ?? '', preferencesQuery.data)
 
   const handleToggle = (key: NotificationKey) => {
     saveMutation.mutate({ ...preferences, [key]: !preferences[key] })

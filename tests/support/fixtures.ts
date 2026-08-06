@@ -23,6 +23,8 @@ export interface SeedFamilyOptions {
   familyName?: string
   childName?: string
   birthDate?: string
+  /** The child's day boundary ('HH:MM'). Defaults to the schema default ('00:00'). */
+  dayStart?: string
 }
 
 export interface TestFactory {
@@ -123,6 +125,7 @@ export const test = base.extend<{ factory: TestFactory }>({
             family_id: familyId as string,
             name: options?.childName ?? `Baby ${uniqueSuffix()}`,
             birth_date: options?.birthDate ?? '2026-01-01',
+            ...(options?.dayStart ? { day_start: options.dayStart } : {}),
           })
           .select('id, name')
           .single<Pick<Child, 'id' | 'name'>>()

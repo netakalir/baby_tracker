@@ -82,6 +82,8 @@ function TodayHeader({ childName, onOpenSettings }: TodayHeaderProps) {
 interface TodayContentProps {
   childId: string
   childName: string
+  /** The child's day boundary ('HH:MM', default '00:00'), scoping "today". */
+  dayStart: string
   onOpenSettings: () => void
 }
 
@@ -90,9 +92,9 @@ interface TodayContentProps {
  * fed by the child's events, a color legend, the estimate rows, and the sticky
  * quick-log bar. Split out so `useTodayEvents` only mounts once we have a child.
  */
-function TodayContent({ childId, childName, onOpenSettings }: TodayContentProps) {
+function TodayContent({ childId, childName, dayStart, onOpenSettings }: TodayContentProps) {
   const today = new Date()
-  const { data: events, isError, error } = useTodayEvents(childId)
+  const { data: events, isError, error } = useTodayEvents(childId, dayStart)
 
   // Live sync: reflect the other parent's logs/edits/deletes without a refresh.
   useTodayEventsRealtime(childId)
@@ -108,12 +110,12 @@ function TodayContent({ childId, childName, onOpenSettings }: TodayContentProps)
       )}
 
       <section className="mt-6 flex flex-col items-center gap-4">
-        <DayClock events={events ?? []} date={today} />
+        <DayClock events={events ?? []} date={today} dayStart={dayStart} />
         <ClockLegend />
       </section>
 
       <div className="mt-6">
-        <EstimateBanners />
+        <EstimateBanners childId={childId} dayStart={dayStart} />
       </div>
 
       <QuickLogButtons childId={childId} events={events ?? []} />
@@ -136,6 +138,7 @@ export function TodayScreen() {
           <TodayContent
             childId={child.id}
             childName={child.name}
+            dayStart={child.day_start}
             onOpenSettings={() => navigate('/settings')}
           />
         ) : (

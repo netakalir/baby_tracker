@@ -1,95 +1,29 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Banner } from '../../components/ui/Banner'
 import { Input } from '../../components/ui/Input'
 import { Label } from '../../components/ui/Label'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
-import { supabase } from '../../lib/supabase'
-import type { UserPreferences } from '../../types/database'
 import { useAuth } from '../auth/useAuth'
 import { useSignOut } from '../auth/useSignOut'
 import { SettingsHeader } from './SettingsHeader'
-
-/**
- * The query key for the signed-in user's private preferences row. Keyed by
- * user id so a different account never reads another user's cached settings.
- */
-function userPreferencesKey(userId: string): [string, string] {
-  return ['user-preferences', userId]
-}
-
-/**
- * Reads the signed-in user's `user_preferences` row. The row may not exist yet
- * (it is created lazily on first save), so a missing row resolves to `null`
- * rather than an error.
- */
-async function fetchUserPreferences(userId: string): Promise<UserPreferences | null> {
-  const { data, error } = await supabase
-    .from('user_preferences')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle<UserPreferences>()
-
-  if (error) throw error
-  return data
-}
-
-/**
- * Persists only the display name for the current user via upsert keyed by
- * user_id. Sending just `user_id` + `display_name` leaves the other preference
- * columns untouched (DB defaults on first insert, unchanged on later updates),
- * so this never clobbers language/theme/notification settings.
- */
-async function updateDisplayName(userId: string, displayName: string): Promise<void> {
-  const trimmed = displayName.trim()
-  const { error } = await supabase
-    .from('user_preferences')
-    .upsert({ user_id: userId, display_name: trimmed === '' ? null : trimmed }, { onConflict: 'user_id' })
-
-  if (error) throw error
-}
-
-/**
- * "Leave only" account deletion (spec §6): removes the user's family membership
- * and their private preferences row, but never the shared family / child /
- * events. A true auth-user delete needs the service role, so it is left to a
- * future Edge Function; here we detach + sign out.
- */
-async function leaveAndDeleteAccount(userId: string): Promise<void> {
-  const { error: membershipError } = await supabase
-    .from('family_members')
-    .delete()
-    .eq('user_id', userId)
-  if (membershipError) throw membershipError
-
-  const { error: preferencesError } = await supabase
-    .from('user_preferences')
-    .delete()
-    .eq('user_id', userId)
-  if (preferencesError) throw preferencesError
-
-  // TODO(settings): deleting the auth.users row itself requires the service role
-  // and cannot run safely from the client. Add a Supabase Edge Function to
-  // complete the hard delete; for now we detach the user and sign them out.
-}
+import { useDeleteAccount } from './useDeleteAccount'
+import { useUpdateDisplayName, useUserPreferences } from './useUserPreferences'
 
 /**
  * "Profile & account" settings sub-screen (spec §3.1 and §6). Shows the editable
  * per-user display name, the read-only auth email, and the two destructive
  * actions — log out (single confirm) and delete account (double confirm,
- * "leave only" semantics that keep shared data for the other parent).
+ * "leave only" semantics that keep shared data for the other parent). All
+ * Supabase access goes through the settings `api.ts` + hooks.
  */
 export function ProfileScreen() {
   const { user } = useAuth()
   const userId = user?.id ?? ''
-  const queryClient = useQueryClient()
   const signOutMutation = useSignOut()
 
-  const preferencesQuery = useQuery({
-    queryKey: userPreferencesKey(userId),
-    queryFn: () => fetchUserPreferences(userId),
-    enabled: userId !== '',
-  })
+  const preferencesQuery = useUserPreferences(userId || undefined)
+  const saveNameMutation = useUpdateDisplayName(userId)
+  const deleteAccountMutation = useDeleteAccount()
 
   const [displayName, setDisplayName] = useState('')
   const [confirmingSignOut, setConfirmingSignOut] = useState(false)
@@ -99,21 +33,6 @@ export function ProfileScreen() {
   useEffect(() => {
     setDisplayName(preferencesQuery.data?.display_name ?? '')
   }, [preferencesQuery.data])
-
-  const saveNameMutation = useMutation({
-    mutationFn: () => updateDisplayName(userId, displayName),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: userPreferencesKey(userId) })
-    },
-  })
-
-  const deleteAccountMutation = useMutation({
-    mutationFn: () => leaveAndDeleteAccount(userId),
-    onSuccess: () => {
-      queryClient.clear()
-      void supabase.auth.signOut()
-    },
-  })
 
   const storedName = preferencesQuery.data?.display_name ?? ''
   const isNameDirty = displayName.trim() !== storedName.trim()
@@ -149,7 +68,7 @@ export function ProfileScreen() {
 
             <button
               type="button"
-              onClick={() => saveNameMutation.mutate()}
+              onClick={() => saveNameMutation.mutate(displayName)}
               disabled={!isNameDirty || saveNameMutation.isPending || userId === ''}
               className="mt-3 flex w-full items-center justify-center rounded-md bg-brand-500 px-4 py-2.5 text-sm font-medium text-neutral-0 transition-colors duration-fast hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:bg-brand-300"
             >

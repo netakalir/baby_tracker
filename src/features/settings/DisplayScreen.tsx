@@ -1,19 +1,17 @@
 import type { ReactNode } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Banner } from '../../components/ui/Banner'
 import { ErrorScreen } from '../../components/ui/ErrorScreen'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
-import { supabase } from '../../lib/supabase'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
 import type {
   AppLanguage,
   AppTheme,
   MeasurementUnit,
   UserPreferences,
-  UserPreferencesUpsert,
 } from '../../types/database'
 import { useAuth } from '../auth/useAuth'
 import { SettingsHeader } from './SettingsHeader'
+import { useUpsertUserPreferences, useUserPreferences } from './useUserPreferences'
 
 /**
  * Defaults that mirror the user_preferences DB column defaults. Used when no row
@@ -23,36 +21,6 @@ import { SettingsHeader } from './SettingsHeader'
 const DEFAULT_LANGUAGE: AppLanguage = 'he'
 const DEFAULT_THEME: AppTheme = 'system'
 const DEFAULT_UNITS: MeasurementUnit = 'ml'
-
-const userPreferencesKey = (userId: string): [string, string] => ['user-preferences', userId]
-
-/** Reads the signed-in user's private preferences row, or null if none yet. */
-async function fetchUserPreferences(userId: string): Promise<UserPreferences | null> {
-  const { data, error } = await supabase
-    .from('user_preferences')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle<UserPreferences>()
-
-  if (error) throw error
-  return data
-}
-
-/**
- * Upserts the user's preferences. The full row is sent (merged over the current
- * values or defaults) so changing one field never clears the others; upsert
- * keyed by user_id creates the row lazily on first save.
- */
-async function upsertUserPreferences(row: UserPreferencesUpsert): Promise<UserPreferences> {
-  const { data, error } = await supabase
-    .from('user_preferences')
-    .upsert(row, { onConflict: 'user_id' })
-    .select()
-    .single<UserPreferences>()
-
-  if (error) throw error
-  return data
-}
 
 interface SelectOption<T extends string> {
   value: T
@@ -154,22 +122,11 @@ function SettingSection({ title, note, children }: SettingSectionProps) {
  * per-child setting and is intentionally NOT exposed here (deferred).
  */
 export function DisplayScreen() {
-  const queryClient = useQueryClient()
   const { user } = useAuth()
   const userId = user?.id
 
-  const preferencesQuery = useQuery({
-    queryKey: userPreferencesKey(userId ?? 'anonymous'),
-    queryFn: () => fetchUserPreferences(userId!),
-    enabled: Boolean(userId),
-  })
-
-  const preferencesMutation = useMutation({
-    mutationFn: upsertUserPreferences,
-    onSuccess: (updated) => {
-      queryClient.setQueryData(userPreferencesKey(updated.user_id), updated)
-    },
-  })
+  const preferencesQuery = useUserPreferences(userId)
+  const preferencesMutation = useUpsertUserPreferences()
 
   if (preferencesQuery.isPending) {
     return <LoadingScreen />

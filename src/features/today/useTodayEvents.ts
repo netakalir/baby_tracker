@@ -8,22 +8,32 @@ import {
   type ImmediateEventType,
   type TimerEventType,
 } from './api'
-import { israelDateString } from './todayDate'
+import { deviceDayKey } from './todayDate'
 
 /**
- * The query key for a child's "today" events. The Israel-local date is part of
- * the key so the cache re-scopes automatically once the day rolls over past
- * Israel-local midnight, rather than serving yesterday's list.
+ * The query key for a child's "today" events. The device-local child-day (the
+ * date its `day_start` falls on) is part of the key so the cache re-scopes
+ * automatically once the day rolls over past the child's `day_start`, rather
+ * than serving yesterday's list.
  */
-export function todayEventsKey(childId: string): [string, string, string] {
-  return ['today-events', childId, israelDateString()]
+export function todayEventsKey(childId: string, dayStart = '00:00'): [string, string, string] {
+  return ['today-events', childId, deviceDayKey(new Date(), dayStart)]
 }
 
-/** Reads the child's events for the current Israel-local day. */
-export function useTodayEvents(childId: string) {
+/**
+ * The child-scoped prefix of {@link todayEventsKey}, without the day segment.
+ * Used for invalidation so a mutation refetches the child's "today" list no
+ * matter which child-day (i.e. which `day_start`-derived date) is cached.
+ */
+export function todayEventsKeyPrefix(childId: string): [string, string] {
+  return ['today-events', childId]
+}
+
+/** Reads the child's events for the current device-local child-day. */
+export function useTodayEvents(childId: string, dayStart = '00:00') {
   return useQuery({
-    queryKey: todayEventsKey(childId),
-    queryFn: () => fetchTodayEvents(childId),
+    queryKey: todayEventsKey(childId, dayStart),
+    queryFn: () => fetchTodayEvents(childId, dayStart),
   })
 }
 
@@ -43,7 +53,7 @@ export function useLogImmediateEvent(childId: string) {
     mutationFn: ({ type, metadata }) =>
       logImmediateEvent(childId, type, metadata),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: todayEventsKey(childId) })
+      void queryClient.invalidateQueries({ queryKey: todayEventsKeyPrefix(childId) })
     },
   })
 }
@@ -58,7 +68,7 @@ export function useStartTimerEvent(childId: string) {
   return useMutation<Event, unknown, { type: TimerEventType; metadata?: Record<string, unknown> }>({
     mutationFn: ({ type, metadata }) => startTimerEvent(childId, type, metadata),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: todayEventsKey(childId) })
+      void queryClient.invalidateQueries({ queryKey: todayEventsKeyPrefix(childId) })
     },
   })
 }
@@ -73,7 +83,7 @@ export function useStopTimerEvent(childId: string) {
   return useMutation<Event, unknown, { eventId: string; metadata?: Record<string, unknown> }>({
     mutationFn: ({ eventId, metadata }) => stopTimerEvent(eventId, metadata),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: todayEventsKey(childId) })
+      void queryClient.invalidateQueries({ queryKey: todayEventsKeyPrefix(childId) })
     },
   })
 }
