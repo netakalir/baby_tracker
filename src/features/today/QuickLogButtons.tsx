@@ -14,6 +14,7 @@ import {
   type FeedingChoice,
 } from './feedingChoice'
 import { formatStopwatch } from './clock/timeFormat'
+import { MOOD_OPTIONS } from './moodOptions'
 import { useLogImmediateEvent, useStartTimerEvent, useStopTimerEvent } from './useTodayEvents'
 
 interface QuickLogButtonsProps {
@@ -24,24 +25,6 @@ interface QuickLogButtonsProps {
 
 /** How long the success confirmation stays visible after a log (ms). */
 const CONFIRMATION_DURATION_MS = 2000
-
-interface MoodOption {
-  /** Stored in `metadata.mood_level` - higher is happier. */
-  level: number
-  emoji: string
-  label: string
-}
-
-/**
- * Mood options, worst to best. `mood_level` is a small ordinal scale so it can
- * be averaged/charted later without another migration (metadata is jsonb).
- */
-const MOOD_OPTIONS: readonly MoodOption[] = [
-  { level: 1, emoji: '😢', label: 'בוכה' },
-  { level: 2, emoji: '😕', label: 'לא רגוע' },
-  { level: 3, emoji: '😊', label: 'רגוע' },
-  { level: 4, emoji: '😄', label: 'שמח' },
-]
 
 /** Confirmation text shown after an event is recorded (immediate log or timer stop). */
 const LOGGED_LABELS: Record<EventType, string> = {

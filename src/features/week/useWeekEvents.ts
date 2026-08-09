@@ -1,21 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
-import { deviceDayKey } from '../today/todayDate'
 import { fetchWeekEvents } from './api'
 
 /**
- * The query key for a child's week events. The current child-day (the date its
- * `day_start` falls on) is part of the key so the cache re-scopes automatically
- * once the day rolls over past the child's `day_start`, sliding the seven-day
- * window forward rather than serving last night's week.
+ * The query key for a child's events in one calendar week. The week anchor
+ * (its Sunday `YYYY-MM-DD`) is part of the key so navigating between weeks
+ * swaps the cached dataset — reloading only the data, not the whole screen.
  */
-export function weekEventsKey(childId: string, dayStart = '00:00'): [string, string, string] {
-  return ['week-events', childId, deviceDayKey(new Date(), dayStart)]
+export function weekEventsKey(childId: string, sunday: string): [string, string, string] {
+  return ['week-events', childId, sunday]
 }
 
-/** Reads the child's events for the current seven-day window. */
-export function useWeekEvents(childId: string, dayStart = '00:00') {
+/** Reads the child's events for the calendar week anchored at `sunday`. */
+export function useWeekEvents(childId: string, sunday: string, dayStart = '00:00') {
   return useQuery({
-    queryKey: weekEventsKey(childId, dayStart),
-    queryFn: () => fetchWeekEvents(childId, dayStart),
+    queryKey: weekEventsKey(childId, sunday),
+    queryFn: () => fetchWeekEvents(childId, sunday, dayStart),
   })
 }
