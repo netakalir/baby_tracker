@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="מעקב תינוק">
+  <rect width="512" height="512" fill="#5b5bd6"/>
+  <!-- Glyph kept within the central 80% maskable safe zone -->
+  <g fill="#ffffff">
+    <rect x="236" y="120" width="40" height="26" rx="12"/>
+    <rect x="214" y="150" width="84" height="30" rx="10"/>
+    <path d="M212 190 q0 -6 6 -6 h76 q6 0 6 6 v150 q0 52 -50 52 h12 q-50 0 -50 -52 z"/>
+  </g>
+  <g stroke="#5b5bd6" stroke-width="10" stroke-linecap="round">
+    <line x1="230" y1="230" x2="262" y2="230"/>
+    <line x1="230" y1="266" x2="278" y2="266"/>
+    <line x1="230" y1="302" x2="262" y2="302"/>
+  </g>
+</svg>

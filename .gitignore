@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 build/
+dev-dist/
 
 # Playwright E2E artifacts
 test-results/
