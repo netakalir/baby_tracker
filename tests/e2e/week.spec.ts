@@ -45,8 +45,6 @@ test.describe('Week screen', () => {
       { type: 'sleep', start_time: hoursAgo(2), end_time: hoursAgo(1) },
       { type: 'feeding', start_time: hoursAgo(0.75), end_time: hoursAgo(0.5) },
       { type: 'feeding', start_time: hoursAgo(0.4), end_time: null },
-      { type: 'diaper', start_time: hoursAgo(1.5), end_time: null },
-      { type: 'mood', start_time: hoursAgo(1.2), end_time: null, metadata: { mood_level: 4 } },
     ])
 
     await signIn(page, user)

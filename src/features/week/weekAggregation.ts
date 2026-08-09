@@ -1,6 +1,5 @@
 import type { Event } from '../../types/database'
 import { clipEventToDay } from '../today/clock/dayWindow'
-import { moodEmoji } from '../today/moodOptions'
 import type { WeekDay } from './weekDate'
 
 /** Per-day figures for one child-day of the week. */
@@ -16,10 +15,6 @@ export interface DaySummary {
   sleepMinutes: number
   /** Number of feeding events that started on this day (count, not volume/duration). */
   feedingCount: number
-  /** Number of diaper changes on this day. */
-  diaperCount: number
-  /** Emoji of the day's dominant mood (most-logged), or `null` if none logged. */
-  dominantMood: string | null
 }
 
 /** The whole week's per-day summaries plus the derived figures the UI needs. */
@@ -29,43 +24,24 @@ export interface WeekSummary {
   avgSleepMinutes: number
   /** Total feedings across the week. */
   totalFeedings: number
-  /** Largest single-day sleep / feeding / diaper values, for scaling each chart. */
+  /** Largest single-day sleep / feeding values, for scaling each chart. */
   maxSleepMinutes: number
   maxFeedingCount: number
-  maxDiaperCount: number
   /** True when no day in the week has any data (drives the whole-week message). */
   isEmpty: boolean
 }
 
-/** Reads a numeric `mood_level` out of an event's jsonb metadata, or `null`. */
-function readMoodLevel(metadata: Event['metadata']): number | null {
-  const value = metadata?.['mood_level']
-  return typeof value === 'number' ? value : null
-}
-
-/** Picks the most-logged mood level of a day; ties break toward the happier level. */
-function dominantMoodEmoji(levelCounts: Map<number, number>): string | null {
-  let bestLevel: number | null = null
-  let bestCount = 0
-  for (const [level, count] of levelCounts) {
-    if (count > bestCount || (count === bestCount && bestLevel !== null && level > bestLevel)) {
-      bestLevel = level
-      bestCount = count
-    }
-  }
-  return bestLevel === null ? null : moodEmoji(bestLevel)
-}
-
 /**
- * Aggregates a week's events into per-day sleep minutes, feeding/diaper counts,
- * and a dominant mood.
+ * Aggregates a week's events into per-day sleep minutes and feeding counts (the
+ * two primary channels). Diaper and mood remain a Today-screen concern and are
+ * only used here to mark a day as having data.
  *
  * - **Sleep** is a duration, split across the days it touches exactly as the
  *   clock does (`clipEventToDay`). An *active* sleep timer (`end_time` null)
  *   counts its elapsed time up to `now`, computed once here (no live ticking) —
  *   `now` is passed in so the value is stable for the render.
- * - **Feeding / diaper / mood** are bucketed by the day their `start_time` falls
- *   in (a feeding is one event regardless of how long it ran).
+ * - **Feeding** is bucketed by the day its `start_time` falls in (one event per
+ *   feeding regardless of how long it ran).
  */
 export function aggregateWeek(
   events: readonly Event[],
@@ -85,10 +61,7 @@ export function aggregateWeek(
     hasData: false,
     sleepMinutes: 0,
     feedingCount: 0,
-    diaperCount: 0,
-    dominantMood: null,
   }))
-  const moodCounts: Map<number, number>[] = days.map(() => new Map())
 
   /** The index of the day an instant falls in, or -1 if outside the week. */
   const dayIndexOf = (instantMs: number): number =>
@@ -106,20 +79,14 @@ export function aggregateWeek(
       continue
     }
 
-    // Feeding / diaper / mood are counted once, on their start day.
+    // Feeding / diaper / mood are counted once, on their start day. Diaper and
+    // mood only mark the day as having data (they are not charted on this screen).
     const index = dayIndexOf(new Date(event.start_time).getTime())
     if (index < 0) continue
     summaries[index].hasData = true
 
     if (event.type === 'feeding') {
       summaries[index].feedingCount += 1
-    } else if (event.type === 'diaper') {
-      summaries[index].diaperCount += 1
-    } else if (event.type === 'mood') {
-      const level = readMoodLevel(event.metadata)
-      if (level !== null) {
-        moodCounts[index].set(level, (moodCounts[index].get(level) ?? 0) + 1)
-      }
     }
   }
 
@@ -128,10 +95,8 @@ export function aggregateWeek(
   let totalFeedings = 0
   let maxSleepMinutes = 0
   let maxFeedingCount = 0
-  let maxDiaperCount = 0
 
-  summaries.forEach((summary, index) => {
-    summary.dominantMood = dominantMoodEmoji(moodCounts[index])
+  summaries.forEach((summary) => {
     if (summary.hasData) {
       trackedDays += 1
       sleepTotal += summary.sleepMinutes
@@ -139,7 +104,6 @@ export function aggregateWeek(
     totalFeedings += summary.feedingCount
     maxSleepMinutes = Math.max(maxSleepMinutes, summary.sleepMinutes)
     maxFeedingCount = Math.max(maxFeedingCount, summary.feedingCount)
-    maxDiaperCount = Math.max(maxDiaperCount, summary.diaperCount)
   })
 
   return {
@@ -148,7 +112,6 @@ export function aggregateWeek(
     totalFeedings,
     maxSleepMinutes,
     maxFeedingCount,
-    maxDiaperCount,
     isEmpty: trackedDays === 0,
   }
 }

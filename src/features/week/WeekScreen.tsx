@@ -7,7 +7,6 @@ import { useOnboardingStatus } from '../onboarding/useOnboardingStatus'
 import { eventColor } from '../today/clock/eventColors'
 import { SettingsHeader } from '../settings/SettingsHeader'
 import { WeekBarChart } from './WeekBarChart'
-import { WeekSecondaryRow } from './WeekSecondaryRow'
 import { aggregateWeek } from './weekAggregation'
 import {
   canGoToNextWeek,
@@ -168,10 +167,6 @@ function WeekContent({ childId, createdAtIso, dayStart, sunday, onWeekChange }: 
               onDaySelect={handleDaySelect}
             />
           </ChartCard>
-
-          <section className="rounded-lg border border-neutral-200 bg-neutral-0 p-4 shadow-sm">
-            <WeekSecondaryRow days={summary.days} maxDiaperCount={summary.maxDiaperCount} />
-          </section>
 
           <p className="text-center text-sm text-neutral-600">
             ממוצע שינה: {formatAverageSleep(summary.avgSleepMinutes, !summary.isEmpty)} · סך האכלות:{' '}
