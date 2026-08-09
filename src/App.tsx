@@ -13,6 +13,7 @@ import { NotificationsScreen } from './features/settings/NotificationsScreen'
 import { ProfileScreen } from './features/settings/ProfileScreen'
 import { SettingsScreen } from './features/settings/SettingsScreen'
 import { TodayScreen } from './features/today/TodayScreen'
+import { WeekScreen } from './features/week/WeekScreen'
 import { RootRedirect } from './routes/RootRedirect'
 import {
   RedirectIfSignedIn,
@@ -57,6 +58,10 @@ function App() {
 
           <Route element={<RequireOnboardingStatus allow="ready" />}>
             <Route path="/today" element={<TodayScreen />} />
+
+            {/* Week is a pushed screen reached from the Today header, not a
+                bottom-nav tab (the app has no bottom nav yet). */}
+            <Route path="/week" element={<WeekScreen />} />
 
             {/* Settings is a pushed screen reached from the Today header gear,
                 not a bottom-nav tab. Placeholders here are filled by later

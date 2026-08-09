@@ -101,13 +101,23 @@ function deviceWallClockUtc(dateString: string, minutesFromMidnight: number): Da
 }
 
 /** Shifts a `YYYY-MM-DD` calendar date by `deltaDays` (pure calendar math, no tz). */
-function shiftDateString(dateString: string, deltaDays: number): string {
+export function shiftDateString(dateString: string, deltaDays: number): string {
   const [year, month, day] = dateString.split('-').map(Number)
   const shifted = new Date(Date.UTC(year, month - 1, day + deltaDays))
   const yyyy = shifted.getUTCFullYear()
   const mm = String(shifted.getUTCMonth() + 1).padStart(2, '0')
   const dd = String(shifted.getUTCDate()).padStart(2, '0')
   return `${yyyy}-${mm}-${dd}`
+}
+
+/**
+ * The UTC instant when the child-day of a given device-local calendar date
+ * (`YYYY-MM-DD`) begins — that date at the child's `day_start` wall-clock time
+ * in the device timezone. DST-safe (delegates to {@link deviceWallClockUtc}).
+ * Lets callers walk fixed calendar days (e.g. a week) without ±24h drift.
+ */
+export function deviceDayStartOnDate(dateString: string, dayStart = '00:00'): Date {
+  return deviceWallClockUtc(dateString, parseDayStartMinutes(dayStart))
 }
 
 /**
