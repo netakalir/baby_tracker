@@ -94,11 +94,19 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return jsonResponse({ error: 'Child not found' }, 403)
   }
 
+  // Payload guard: only the recent window feeds the estimates (contract §2 and
+  // estimate.ts's FEEDING_WINDOW_DAYS). 14 days comfortably covers the 7-day
+  // feeding window and the most recent completed sleep, while keeping the fetch
+  // small. The pure computation applies the exact windowing/outlier rules.
+  const now = new Date()
+  const eventsSince = new Date(now.getTime() - 14 * 24 * 60 * 60_000).toISOString()
+
   const { data: events, error: eventsError } = await supabase
     .from('events')
     .select('type, start_time, end_time')
     .eq('child_id', childId)
     .in('type', ['feeding', 'sleep'])
+    .gte('start_time', eventsSince)
     .order('start_time', { ascending: true })
     .returns<EventRow[]>()
 
@@ -106,13 +114,12 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return jsonResponse({ error: 'Could not load events' }, 500)
   }
 
-  const now = new Date()
   const norm = normForAge(ageInMonths(new Date(child.birth_date), now))
   const estimateEvents: EstimateEvent[] = events ?? []
 
   const response: EstimateResponse = {
     generated_at: now.toISOString(),
-    feeding: computeFeedingEstimate(estimateEvents, norm),
+    feeding: computeFeedingEstimate(estimateEvents, norm, now),
     sleep: computeSleepEstimate(estimateEvents, norm),
   }
 
