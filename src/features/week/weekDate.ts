@@ -12,11 +12,12 @@
  */
 
 import {
-  deviceDateString,
+  currentChildDateString,
   deviceDayStartOnDate,
-  deviceDayWindowStart,
   shiftDateString,
 } from '../today/todayDate'
+
+export { currentChildDateString }
 
 /** Days per displayed week (Sunday … Saturday). */
 export const DAYS_IN_WEEK = 7
@@ -46,11 +47,6 @@ function weekdayIndex(dateString: string): number {
 /** The Sunday (`YYYY-MM-DD`) of the calendar week containing `dateString`. */
 export function weekSundayForDate(dateString: string): string {
   return shiftDateString(dateString, -weekdayIndex(dateString))
-}
-
-/** The device-local calendar date (`YYYY-MM-DD`) of the child-day containing `now`. */
-export function currentChildDateString(now: Date = new Date(), dayStart = '00:00'): string {
-  return deviceDateString(deviceDayWindowStart(now, dayStart))
 }
 
 /** The Sunday anchor of the week containing `now` — the default week on entry. */

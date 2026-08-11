@@ -17,14 +17,10 @@ interface WeekBarChartProps {
   /** The tallest value across the week, used to scale every bar. */
   max: number
   /**
-   * Navigate to that day's Today view; not called for future days. Optional:
-   * when omitted, columns render as non-interactive elements (no button, no
-   * hover/focus affordance). This is the temporary state until historical-mode
-   * Today ships — a clickable column that lands on the *live* day would be a
-   * data-safety trap (accidental logging under a past date). See
-   * screen-today-spec.md §9.
+   * Navigate to that day's Today view (live for today, historical for a past
+   * day); not called for future days, whose columns are disabled.
    */
-  onDaySelect?: (day: WeekDay) => void
+  onDaySelect: (day: WeekDay) => void
 }
 
 /** Vertical gradient (light `300` top → solid `500` bottom) for a bar. */
@@ -102,18 +98,6 @@ export function WeekBarChart({
             </div>
           </>
         )
-
-        // Non-interactive until historical-mode Today ships (see prop docs).
-        if (!onDaySelect) {
-          return (
-            <div
-              key={day.dateString}
-              className="flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-md py-1"
-            >
-              {column}
-            </div>
-          )
-        }
 
         return (
           <button
