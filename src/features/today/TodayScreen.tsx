@@ -20,16 +20,17 @@ const headerDateFormatter = new Intl.DateTimeFormat('he-IL', {
 
 interface TodayHeaderProps {
   childName: string
+  onOpenWeek: () => void
   onOpenSettings: () => void
 }
 
 /**
  * Top app bar: the date on the start side, and a child "pill" (avatar + name) on
  * the end side - the entry point for the multi-child switcher (a later slice, so
- * for now it is a static identity). A settings gear sits as a compact icon at the
- * edge, pushing the Settings hub (which holds sign-out and preferences).
+ * for now it is a static identity). A week-chart icon and a settings gear sit as
+ * compact icons at the edge, pushing the Week screen and the Settings hub.
  */
-function TodayHeader({ childName, onOpenSettings }: TodayHeaderProps) {
+function TodayHeader({ childName, onOpenWeek, onOpenSettings }: TodayHeaderProps) {
   return (
     <header className="flex items-center justify-between gap-3">
       <div className="min-w-0">
@@ -50,6 +51,23 @@ function TodayHeader({ childName, onOpenSettings }: TodayHeaderProps) {
             👶
           </span>
         </div>
+
+        <button
+          type="button"
+          onClick={onOpenWeek}
+          aria-label="שבוע"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-colors duration-fast hover:bg-neutral-100 hover:text-neutral-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        >
+          <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+            <path
+              d="M4 20V10M10 20V4M16 20v-7M4 20h16"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
 
         <button
           type="button"
@@ -84,6 +102,7 @@ interface TodayContentProps {
   childName: string
   /** The child's day boundary ('HH:MM', default '00:00'), scoping "today". */
   dayStart: string
+  onOpenWeek: () => void
   onOpenSettings: () => void
 }
 
@@ -92,7 +111,7 @@ interface TodayContentProps {
  * fed by the child's events, a color legend, the estimate rows, and the sticky
  * quick-log bar. Split out so `useTodayEvents` only mounts once we have a child.
  */
-function TodayContent({ childId, childName, dayStart, onOpenSettings }: TodayContentProps) {
+function TodayContent({ childId, childName, dayStart, onOpenWeek, onOpenSettings }: TodayContentProps) {
   const today = new Date()
   const { data: events, isError, error } = useTodayEvents(childId, dayStart)
 
@@ -101,7 +120,7 @@ function TodayContent({ childId, childName, dayStart, onOpenSettings }: TodayCon
 
   return (
     <>
-      <TodayHeader childName={childName} onOpenSettings={onOpenSettings} />
+      <TodayHeader childName={childName} onOpenWeek={onOpenWeek} onOpenSettings={onOpenSettings} />
 
       {isError && (
         <div className="mt-4">
@@ -139,6 +158,7 @@ export function TodayScreen() {
             childId={child.id}
             childName={child.name}
             dayStart={child.day_start}
+            onOpenWeek={() => navigate('/week')}
             onOpenSettings={() => navigate('/settings')}
           />
         ) : (
