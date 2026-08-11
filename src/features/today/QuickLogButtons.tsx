@@ -59,8 +59,8 @@ const RING_BY_TYPE: Record<EventType, string> = {
 
 /** Filled surface for an actively-running timer, per timer type. */
 const ACTIVE_SURFACE_BY_TYPE: Record<TimerEventType, string> = {
-  sleep: 'border-transparent bg-sleep-500 text-neutral-0',
-  feeding: 'border-transparent bg-feeding-500 text-neutral-0',
+  sleep: 'border-transparent bg-sleep-500 text-on-accent',
+  feeding: 'border-transparent bg-feeding-500 text-on-accent',
 }
 
 interface QuickLogButtonProps {
@@ -395,7 +395,7 @@ export function QuickLogButtons({ childId, events, disabled = false }: QuickLogB
         {confirmedType && (
           <div
             role="status"
-            className="rounded-full bg-success-500 px-4 py-2 text-center text-sm font-medium text-neutral-0 shadow-sm"
+            className="rounded-full bg-success-500 px-4 py-2 text-center text-sm font-medium text-on-accent shadow-sm"
           >
             {LOGGED_LABELS[confirmedType]}
           </div>

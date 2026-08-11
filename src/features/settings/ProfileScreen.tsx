@@ -70,7 +70,7 @@ export function ProfileScreen() {
               type="button"
               onClick={() => saveNameMutation.mutate(displayName)}
               disabled={!isNameDirty || saveNameMutation.isPending || userId === ''}
-              className="mt-3 flex w-full items-center justify-center rounded-md bg-brand-500 px-4 py-2.5 text-sm font-medium text-neutral-0 transition-colors duration-fast hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:bg-brand-300"
+              className="mt-3 flex w-full items-center justify-center rounded-md bg-brand-500 px-4 py-2.5 text-sm font-medium text-on-accent transition-colors duration-fast hover:bg-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:bg-brand-300"
             >
               {saveNameMutation.isPending ? 'רגע...' : 'שמירה'}
             </button>
@@ -177,7 +177,7 @@ export function ProfileScreen() {
                     type="button"
                     onClick={() => deleteAccountMutation.mutate()}
                     disabled={deleteAccountMutation.isPending || userId === ''}
-                    className="flex flex-1 items-center justify-center rounded-md bg-error-500 px-4 py-2.5 text-sm font-medium text-neutral-0 transition-opacity duration-fast hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-error-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex flex-1 items-center justify-center rounded-md bg-error-500 px-4 py-2.5 text-sm font-medium text-on-accent transition-opacity duration-fast hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-error-500 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {deleteAccountMutation.isPending ? 'רגע...' : 'מחיקה סופית'}
                   </button>

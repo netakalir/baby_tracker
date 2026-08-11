@@ -94,7 +94,7 @@ export function AuthPage() {
             type="button"
             onClick={() => switchMode('signIn')}
             className={`flex-1 rounded-sm py-1.5 transition-colors duration-fast ${
-              mode === 'signIn' ? 'bg-brand-500 text-neutral-0' : 'text-neutral-600'
+              mode === 'signIn' ? 'bg-brand-500 text-on-accent' : 'text-neutral-600'
             }`}
           >
             התחברות
@@ -103,7 +103,7 @@ export function AuthPage() {
             type="button"
             onClick={() => switchMode('signUp')}
             className={`flex-1 rounded-sm py-1.5 transition-colors duration-fast ${
-              mode === 'signUp' ? 'bg-brand-500 text-neutral-0' : 'text-neutral-600'
+              mode === 'signUp' ? 'bg-brand-500 text-on-accent' : 'text-neutral-600'
             }`}
           >
             הרשמה
