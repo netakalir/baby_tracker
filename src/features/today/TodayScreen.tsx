@@ -12,9 +12,9 @@ import { QuickLogButtons } from './QuickLogButtons'
 import { useTodayEvents } from './useTodayEvents'
 import { useTodayEventsRealtime } from './useTodayEventsRealtime'
 
-/** "יום שלישי, 22 ביולי" - the current day, in Israel-local terms. */
+/** "יום שלישי, 22 ביולי" - the current day, in device-local terms. */
 const headerDateFormatter = new Intl.DateTimeFormat('he-IL', {
-  timeZone: 'Asia/Jerusalem',
+  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   weekday: 'long',
   day: 'numeric',
   month: 'long',

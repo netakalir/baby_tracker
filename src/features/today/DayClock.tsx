@@ -4,7 +4,7 @@ import { clipEventToDay, type DaySegment } from './clock/dayWindow'
 import { eventColor } from './clock/eventColors'
 import { minutesToAngle, pointOnCircle, strokeArcPath, type Point } from './clock/geometry'
 import { RING_ORDER, RING_STROKE, RINGS, ringRadius } from './clock/rings'
-import { formatDuration, formatIsraelTime } from './clock/timeFormat'
+import { formatDuration, formatDeviceTime } from './clock/timeFormat'
 import { feedingDetailLabel } from './feedingChoice'
 import { parseDayStartMinutes } from './todayDate'
 
@@ -94,13 +94,13 @@ function describeEvent({ event, segment, isOngoing }: Drawable): EventDescriptio
   const label = eventLabel(event)
   if (isOngoing) {
     const elapsed = formatDuration(event.start_time, new Date().toISOString())
-    return { label, lines: [`מ-${formatIsraelTime(event.start_time)}`, `בתהליך · ${elapsed}`] }
+    return { label, lines: [`מ-${formatDeviceTime(event.start_time)}`, `בתהליך · ${elapsed}`] }
   }
   if (segment.isPointInTime || event.end_time === null) {
-    return { label, lines: [`בשעה ${formatIsraelTime(event.start_time)}`] }
+    return { label, lines: [`בשעה ${formatDeviceTime(event.start_time)}`] }
   }
   const duration = formatDuration(event.start_time, event.end_time)
-  const range = `${formatIsraelTime(event.start_time)}–${formatIsraelTime(event.end_time)}`
+  const range = `${formatDeviceTime(event.start_time)}–${formatDeviceTime(event.end_time)}`
   return {
     // The time range is wrapped in an LTR isolate (LRI…PDI) so "22:40–06:10"
     // keeps start-before-end order inside the RTL layout instead of flipping.
@@ -118,14 +118,14 @@ function ariaLabelFor({ event, segment, isOngoing }: Drawable): string {
   const label = eventLabel(event)
   if (isOngoing) {
     const elapsed = formatDuration(event.start_time, new Date().toISOString())
-    return `${label} מ-${formatIsraelTime(event.start_time)}, עדיין בתהליך (${elapsed})`
+    return `${label} מ-${formatDeviceTime(event.start_time)}, עדיין בתהליך (${elapsed})`
   }
   if (segment.isPointInTime || event.end_time === null) {
-    return `${label} בשעה ${formatIsraelTime(event.start_time)}`
+    return `${label} בשעה ${formatDeviceTime(event.start_time)}`
   }
   const duration = formatDuration(event.start_time, event.end_time)
-  const from = formatIsraelTime(event.start_time)
-  const to = formatIsraelTime(event.end_time)
+  const from = formatDeviceTime(event.start_time)
+  const to = formatDeviceTime(event.end_time)
   return `${label} מ-${from} עד ${to}, משך ${duration}`
 }
 
