@@ -21,6 +21,12 @@ interface QuickLogButtonsProps {
   childId: string
   /** The child's events for today, used to detect which timers are running. */
   events: Event[]
+  /**
+   * Neutralises every button (grey, non-interactive) without unmounting the bar
+   * — used by the historical view so a past day cannot be logged under (spec
+   * §9.3). Running-timer visuals are also suppressed so no live stopwatch ticks.
+   */
+  disabled?: boolean
 }
 
 /** How long the success confirmation stays visible after a log (ms). */
@@ -260,7 +266,7 @@ function FeedingAmountMenu({ disabled, onSelect }: FeedingAmountMenuProps) {
   )
 }
 
-export function QuickLogButtons({ childId, events }: QuickLogButtonsProps) {
+export function QuickLogButtons({ childId, events, disabled = false }: QuickLogButtonsProps) {
   const logMutation = useLogImmediateEvent(childId)
   const startTimerMutation = useStartTimerEvent(childId)
   const stopTimerMutation = useStopTimerEvent(childId)
@@ -274,12 +280,15 @@ export function QuickLogButtons({ childId, events }: QuickLogButtonsProps) {
   // "stop" while its type is active, which is what enforces one-active-per-type.
   const activeTimers = useMemo(() => {
     const byType = new Map<TimerEventType, Event>()
+    // Historical (disabled) mode never shows a running timer: a past day has no
+    // "live" active timer to stop, so the buttons stay in their idle look.
+    if (disabled) return byType
     for (const event of events) {
       if (event.end_time !== null) continue
       if (event.type === 'sleep' || event.type === 'feeding') byType.set(event.type, event)
     }
     return byType
-  }, [events])
+  }, [events, disabled])
 
   // Tick once a second only while at least one timer is running, so the live
   // stopwatch updates without re-rendering the whole screen when idle.
@@ -371,7 +380,10 @@ export function QuickLogButtons({ childId, events }: QuickLogButtonsProps) {
   }
 
   const isPending =
-    logMutation.isPending || startTimerMutation.isPending || stopTimerMutation.isPending
+    disabled ||
+    logMutation.isPending ||
+    startTimerMutation.isPending ||
+    stopTimerMutation.isPending
   const mutationError = logMutation.error ?? startTimerMutation.error ?? stopTimerMutation.error
   const isError = logMutation.isError || startTimerMutation.isError || stopTimerMutation.isError
 

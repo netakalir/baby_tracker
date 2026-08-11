@@ -25,6 +25,11 @@ export interface SeedFamilyOptions {
   birthDate?: string
   /** The child's day boundary ('HH:MM'). Defaults to the schema default ('00:00'). */
   dayStart?: string
+  /**
+   * The child's `created_at` (ISO). Defaults to now (the schema default).
+   * Backdate it to seed past days the historical Today view can navigate to.
+   */
+  createdAt?: string
 }
 
 export interface TestFactory {
@@ -126,6 +131,7 @@ export const test = base.extend<{ factory: TestFactory }>({
             name: options?.childName ?? `Baby ${uniqueSuffix()}`,
             birth_date: options?.birthDate ?? '2026-01-01',
             ...(options?.dayStart ? { day_start: options.dayStart } : {}),
+            ...(options?.createdAt ? { created_at: options.createdAt } : {}),
           })
           .select('id, name')
           .single<Pick<Child, 'id' | 'name'>>()

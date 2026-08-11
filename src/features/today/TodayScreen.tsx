@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Banner } from '../../components/ui/Banner'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
@@ -6,6 +6,8 @@ import { useOnboardingStatus } from '../onboarding/useOnboardingStatus'
 import { ClockLegend } from './ClockLegend'
 import { DayClock } from './DayClock'
 import { EstimateBanners } from './EstimateBanners'
+import { HistoricalDayView } from './HistoricalDayView'
+import { resolveTodayMode } from './historicalDate'
 import { QuickLogButtons } from './QuickLogButtons'
 import { useTodayEvents } from './useTodayEvents'
 import { useTodayEventsRealtime } from './useTodayEventsRealtime'
@@ -145,22 +147,39 @@ function TodayContent({ childId, childName, dayStart, onOpenWeek, onOpenSettings
 export function TodayScreen() {
   const { data: onboardingState } = useOnboardingStatus()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   if (!onboardingState) return <LoadingScreen />
 
   const child = onboardingState.firstChild
 
+  // A `date=YYYY-MM-DD` param opens a past day read-only; anything invalid,
+  // today, future or pre-creation falls back to the live view (spec §9.1).
+  const mode = child
+    ? resolveTodayMode(searchParams.get('date'), child.day_start, child.created_at)
+    : { kind: 'live' as const }
+
   return (
     <div className="min-h-screen bg-neutral-50 px-5 pb-40 pt-6">
       <div className="mx-auto w-full max-w-sm">
         {child ? (
-          <TodayContent
-            childId={child.id}
-            childName={child.name}
-            dayStart={child.day_start}
-            onOpenWeek={() => navigate('/week')}
-            onOpenSettings={() => navigate('/settings')}
-          />
+          mode.kind === 'historical' ? (
+            <HistoricalDayView
+              childId={child.id}
+              childName={child.name}
+              dayStart={child.day_start}
+              createdAtIso={child.created_at}
+              dateString={mode.dateString}
+            />
+          ) : (
+            <TodayContent
+              childId={child.id}
+              childName={child.name}
+              dayStart={child.day_start}
+              onOpenWeek={() => navigate('/week')}
+              onOpenSettings={() => navigate('/settings')}
+            />
+          )
         ) : (
           <p className="mt-10 text-center text-sm text-neutral-600">לא נמצא/ה ילד/ה במשפחה</p>
         )}

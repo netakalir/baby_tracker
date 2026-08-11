@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Banner } from '../../components/ui/Banner'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
@@ -15,6 +16,7 @@ import {
   weekBounds,
   weekDaysForSunday,
   weekRangeLabel,
+  type WeekDay,
 } from './weekDate'
 import { formatAverageSleep, formatHoursShort } from './weekFormat'
 import { useWeekEvents } from './useWeekEvents'
@@ -92,6 +94,7 @@ function ChartCard({ title, accent, children }: ChartCardProps) {
  * navigation reloads data, not the whole screen.
  */
 function WeekContent({ childId, createdAtIso, dayStart, sunday, onWeekChange }: WeekContentProps) {
+  const navigate = useNavigate()
   const { data: events, isLoading, isError, error } = useWeekEvents(childId, sunday, dayStart)
 
   const summary = useMemo(() => {
@@ -100,11 +103,11 @@ function WeekContent({ childId, createdAtIso, dayStart, sunday, onWeekChange }: 
     return aggregateWeek(events ?? [], days, endIso, dayStart)
   }, [events, sunday, dayStart])
 
-  // Day-column click intentionally omitted: it would navigate to Today for the
-  // selected date, but historical-mode Today is not built yet (screen-today-spec
-  // §9). Wiring it now would land the user on the *live* day with active logging
-  // buttons under a past-date context — a data-safety trap. Re-enable by passing
-  // `onDaySelect` to the charts once §9 ships.
+  // Opening a day column: today opens the live Today view (no param), a past day
+  // opens Today in historical mode via `?date=` (screen-today-spec §9.6).
+  const handleDaySelect = (day: WeekDay) => {
+    navigate(day.isToday ? '/today' : `/today?date=${day.dateString}`)
+  }
 
   const canPrev = canGoToPrevWeek(sunday, createdAtIso, dayStart)
   const canNext = canGoToNextWeek(sunday, new Date(), dayStart)
@@ -145,6 +148,7 @@ function WeekContent({ childId, createdAtIso, dayStart, sunday, onWeekChange }: 
               getValueText={(day) =>
                 day.hasData ? `${formatHoursShort(day.sleepMinutes) || '0'} שעות שינה` : 'אין נתונים'
               }
+              onDaySelect={handleDaySelect}
             />
           </ChartCard>
 
@@ -156,6 +160,7 @@ function WeekContent({ childId, createdAtIso, dayStart, sunday, onWeekChange }: 
               getValue={(day) => day.feedingCount}
               getLabel={(day) => (day.feedingCount > 0 ? String(day.feedingCount) : '')}
               getValueText={(day) => (day.hasData ? `${day.feedingCount} האכלות` : 'אין נתונים')}
+              onDaySelect={handleDaySelect}
             />
           </ChartCard>
 

@@ -135,6 +135,27 @@ export function deviceDayWindowStart(now: Date = new Date(), dayStart = '00:00')
 }
 
 /**
+ * The device-local calendar date (`YYYY-MM-DD`) of the child-day containing
+ * `now` — the date its `day_start` falls on. This is "today" for the child.
+ */
+export function currentChildDateString(now: Date = new Date(), dayStart = '00:00'): string {
+  return deviceDateString(deviceDayWindowStart(now, dayStart))
+}
+
+/**
+ * The UTC ISO bounds (start inclusive, end exclusive) of a *specific* child-day,
+ * identified by its device-local calendar date (`YYYY-MM-DD`) and offset by the
+ * child's `day_start`. Unlike {@link deviceDayBounds} this is anchored on a
+ * chosen calendar date rather than "now", so the historical Today view can
+ * fetch any past day's window. DST-safe (delegates to {@link deviceDayStartOnDate}).
+ */
+export function deviceDayBoundsForDate(dateString: string, dayStart = '00:00'): DayBounds {
+  const start = deviceDayStartOnDate(dateString, dayStart)
+  const end = deviceDayStartOnDate(shiftDateString(dateString, 1), dayStart)
+  return { startIso: start.toISOString(), endIso: end.toISOString() }
+}
+
+/**
  * The UTC ISO bounds (start inclusive, end exclusive) of the child-day
  * containing `now`, offset by the child's `day_start`.
  */

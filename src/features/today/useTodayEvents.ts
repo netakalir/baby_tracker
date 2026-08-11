@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Event } from '../../types/database'
 import {
+  fetchEventsForDate,
   fetchTodayEvents,
   logImmediateEvent,
   startTimerEvent,
@@ -34,6 +35,28 @@ export function useTodayEvents(childId: string, dayStart = '00:00') {
   return useQuery({
     queryKey: todayEventsKey(childId, dayStart),
     queryFn: () => fetchTodayEvents(childId, dayStart),
+  })
+}
+
+/**
+ * The query key for a child's events on a *specific* past child-day. The
+ * selected calendar date is part of the key so a historical day never collides
+ * with the live "today" cache (spec §9.2). It shares the `['today-events',
+ * childId]` prefix, so a mutation's invalidation still refetches it.
+ */
+export function dayEventsKey(childId: string, dateString: string): [string, string, string] {
+  return ['today-events', childId, dateString]
+}
+
+/**
+ * Reads the child's events for a specific past child-day (historical Today,
+ * §9.2). Read-only: the historical view exposes no logging, so there is no
+ * matching mutation hook.
+ */
+export function useDayEvents(childId: string, dateString: string, dayStart = '00:00') {
+  return useQuery({
+    queryKey: dayEventsKey(childId, dateString),
+    queryFn: () => fetchEventsForDate(childId, dateString, dayStart),
   })
 }
 

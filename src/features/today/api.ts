@@ -1,6 +1,6 @@
 import { supabase } from '../../lib/supabase'
 import type { Event, EventType } from '../../types/database'
-import { deviceDayBounds } from './todayDate'
+import { deviceDayBounds, deviceDayBoundsForDate } from './todayDate'
 
 /**
  * Event types logged as a single instantaneous tap (no duration). These are
@@ -131,7 +131,34 @@ export async function stopTimerEvent(
  */
 export async function fetchTodayEvents(childId: string, dayStart = '00:00'): Promise<Event[]> {
   const { startIso, endIso } = deviceDayBounds(new Date(), dayStart)
+  return fetchEventsInWindow(childId, startIso, endIso)
+}
 
+/**
+ * Fetches a child's events overlapping a *specific* past child-day, identified
+ * by its device-local calendar date (`YYYY-MM-DD`). Used by the historical Today
+ * view (spec §9.2): the whole data chain is anchored on the selected date, not
+ * on "now", so a midnight-crossing event clips to that day's bounds exactly as
+ * it does on the live clock and the Week screen.
+ */
+export async function fetchEventsForDate(
+  childId: string,
+  dateString: string,
+  dayStart = '00:00',
+): Promise<Event[]> {
+  const { startIso, endIso } = deviceDayBoundsForDate(dateString, dayStart)
+  return fetchEventsInWindow(childId, startIso, endIso)
+}
+
+/**
+ * Shared day-window query: a child's events overlapping `[startIso, endIso)`,
+ * ordered chronologically. See {@link fetchTodayEvents} for the overlap rule.
+ */
+async function fetchEventsInWindow(
+  childId: string,
+  startIso: string,
+  endIso: string,
+): Promise<Event[]> {
   const { data, error } = await supabase
     .from('events')
     .select('*')

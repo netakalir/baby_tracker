@@ -21,6 +21,14 @@ interface DayClockProps {
   dayStart?: string
   /** Optional: called when an existing arc/marker is clicked. */
   onArcClick?: (event: Event) => void
+  /**
+   * Read-only (historical) mode: a still-running timer event (no `end_time`) is
+   * NOT extended to "now" — there is no live elapsed time on a past day (spec
+   * §9.2). It renders from its stored data only, as a point on its ring.
+   */
+  readOnly?: boolean
+  /** Message shown when the day has no events at all (overrides the live copy). */
+  emptyStateText?: string
 }
 
 // --- Dimensions (viewBox units; the SVG scales responsively via CSS). ---
@@ -121,7 +129,14 @@ function ariaLabelFor({ event, segment, isOngoing }: Drawable): string {
   return `${label} מ-${from} עד ${to}, משך ${duration}`
 }
 
-export function DayClock({ events, date, dayStart = '00:00', onArcClick }: DayClockProps) {
+export function DayClock({
+  events,
+  date,
+  dayStart = '00:00',
+  onArcClick,
+  readOnly = false,
+  emptyStateText = EMPTY_STATE_TEXT,
+}: DayClockProps) {
   // useId gives stable, collision-free ids so multiple clocks can coexist on a page.
   const idPrefix = useId().replace(/[^a-zA-Z0-9_-]/g, '')
 
@@ -137,7 +152,7 @@ export function DayClock({ events, date, dayStart = '00:00', onArcClick }: DayCl
     const pointList: Drawable[] = []
 
     for (const event of events) {
-      const isOngoing = event.end_time === null && TIMER_TYPES.has(event.type)
+      const isOngoing = !readOnly && event.end_time === null && TIMER_TYPES.has(event.type)
       const segment = clipEventToDay(
         event.start_time,
         isOngoing ? nowIso : event.end_time,
@@ -151,7 +166,7 @@ export function DayClock({ events, date, dayStart = '00:00', onArcClick }: DayCl
     }
 
     return { arcs: arcList, points: pointList }
-  }, [events, date, dayStart])
+  }, [events, date, dayStart, readOnly])
 
   const isEmpty = arcs.length === 0 && points.length === 0
   const clickable = onArcClick !== undefined
@@ -412,7 +427,7 @@ export function DayClock({ events, date, dayStart = '00:00', onArcClick }: DayCl
       </svg>
 
       {isEmpty && (
-        <p className="max-w-xs text-center text-sm text-neutral-600">{EMPTY_STATE_TEXT}</p>
+        <p className="max-w-xs text-center text-sm text-neutral-600">{emptyStateText}</p>
       )}
     </div>
   )
