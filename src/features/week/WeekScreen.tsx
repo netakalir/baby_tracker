@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Banner } from '../../components/ui/Banner'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
@@ -11,13 +10,11 @@ import { aggregateWeek } from './weekAggregation'
 import {
   canGoToNextWeek,
   canGoToPrevWeek,
-  currentChildDateString,
   currentWeekSunday,
   shiftWeekSunday,
   weekBounds,
   weekDaysForSunday,
   weekRangeLabel,
-  type WeekDay,
 } from './weekDate'
 import { formatAverageSleep, formatHoursShort } from './weekFormat'
 import { useWeekEvents } from './useWeekEvents'
@@ -90,13 +87,11 @@ function ChartCard({ title, accent, children }: ChartCardProps) {
 }
 
 /**
- * The live week view: navigator + two primary charts (sleep hours, feeding
- * count), a secondary diaper/mood strip, and a one-line summary. Only this
- * subtree re-queries when the week changes, so navigation reloads data, not the
- * whole screen.
+ * The live week view: navigator + two charts (sleep hours, feeding count) and a
+ * one-line summary. Only this subtree re-queries when the week changes, so
+ * navigation reloads data, not the whole screen.
  */
 function WeekContent({ childId, createdAtIso, dayStart, sunday, onWeekChange }: WeekContentProps) {
-  const navigate = useNavigate()
   const { data: events, isLoading, isError, error } = useWeekEvents(childId, sunday, dayStart)
 
   const summary = useMemo(() => {
@@ -105,13 +100,11 @@ function WeekContent({ childId, createdAtIso, dayStart, sunday, onWeekChange }: 
     return aggregateWeek(events ?? [], days, endIso, dayStart)
   }, [events, sunday, dayStart])
 
-  const handleDaySelect = (day: WeekDay) => {
-    // A past day opens Today in historical mode via a date param; the current
-    // day opens plain Today. NOTE: historical Today is not built yet — see the
-    // handover summary. Today currently ignores the param and shows the live day.
-    const todayString = currentChildDateString(new Date(), dayStart)
-    navigate(day.dateString === todayString ? '/today' : `/today?date=${day.dateString}`)
-  }
+  // Day-column click intentionally omitted: it would navigate to Today for the
+  // selected date, but historical-mode Today is not built yet (screen-today-spec
+  // §9). Wiring it now would land the user on the *live* day with active logging
+  // buttons under a past-date context — a data-safety trap. Re-enable by passing
+  // `onDaySelect` to the charts once §9 ships.
 
   const canPrev = canGoToPrevWeek(sunday, createdAtIso, dayStart)
   const canNext = canGoToNextWeek(sunday, new Date(), dayStart)
@@ -152,7 +145,6 @@ function WeekContent({ childId, createdAtIso, dayStart, sunday, onWeekChange }: 
               getValueText={(day) =>
                 day.hasData ? `${formatHoursShort(day.sleepMinutes) || '0'} שעות שינה` : 'אין נתונים'
               }
-              onDaySelect={handleDaySelect}
             />
           </ChartCard>
 
@@ -164,7 +156,6 @@ function WeekContent({ childId, createdAtIso, dayStart, sunday, onWeekChange }: 
               getValue={(day) => day.feedingCount}
               getLabel={(day) => (day.feedingCount > 0 ? String(day.feedingCount) : '')}
               getValueText={(day) => (day.hasData ? `${day.feedingCount} האכלות` : 'אין נתונים')}
-              onDaySelect={handleDaySelect}
             />
           </ChartCard>
 
@@ -180,8 +171,8 @@ function WeekContent({ childId, createdAtIso, dayStart, sunday, onWeekChange }: 
 
 /**
  * The "Week" screen: a pushed screen reached from the Today header, showing one
- * Sunday–Saturday calendar week of sleep, feeding, diaper and mood as polished
- * custom charts ("visual before textual"). The selected week lives in state so
+ * Sunday–Saturday calendar week of sleep and feeding as polished custom charts
+ * ("visual before textual"). The selected week lives in state so
  * it survives data reloads and child switches; a back arrow returns to Today.
  */
 export function WeekScreen() {

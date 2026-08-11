@@ -16,8 +16,15 @@ interface WeekBarChartProps {
   getValueText: (summary: DaySummary) => string
   /** The tallest value across the week, used to scale every bar. */
   max: number
-  /** Navigate to that day's Today view; not called for future days. */
-  onDaySelect: (day: WeekDay) => void
+  /**
+   * Navigate to that day's Today view; not called for future days. Optional:
+   * when omitted, columns render as non-interactive elements (no button, no
+   * hover/focus affordance). This is the temporary state until historical-mode
+   * Today ships — a clickable column that lands on the *live* day would be a
+   * data-safety trap (accidental logging under a past date). See
+   * screen-today-spec.md §9.
+   */
+  onDaySelect?: (day: WeekDay) => void
 }
 
 /** Vertical gradient (light `300` top → solid `500` bottom) for a bar. */
@@ -71,15 +78,8 @@ export function WeekBarChart({
           </span>
         )
 
-        return (
-          <button
-            key={day.dateString}
-            type="button"
-            disabled={day.isFuture}
-            onClick={() => onDaySelect(day)}
-            aria-label={`${formatWeekday(day.date)} ${formatDayOfMonth(day.date)}: ${getValueText(summary)}`}
-            className="flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-md py-1 transition-colors duration-fast hover:bg-neutral-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:pointer-events-none disabled:opacity-40"
-          >
+        const column = (
+          <>
             <span className="h-4 text-xs tabular-nums text-neutral-600">{label}</span>
 
             <div className="flex h-40 w-full flex-col justify-end">
@@ -100,6 +100,31 @@ export function WeekBarChart({
                 {formatDayOfMonth(day.date)}
               </span>
             </div>
+          </>
+        )
+
+        // Non-interactive until historical-mode Today ships (see prop docs).
+        if (!onDaySelect) {
+          return (
+            <div
+              key={day.dateString}
+              className="flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-md py-1"
+            >
+              {column}
+            </div>
+          )
+        }
+
+        return (
+          <button
+            key={day.dateString}
+            type="button"
+            disabled={day.isFuture}
+            onClick={() => onDaySelect(day)}
+            aria-label={`${formatWeekday(day.date)} ${formatDayOfMonth(day.date)}: ${getValueText(summary)}`}
+            className="flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-md py-1 transition-colors duration-fast hover:bg-neutral-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:pointer-events-none disabled:opacity-40"
+          >
+            {column}
           </button>
         )
       })}
