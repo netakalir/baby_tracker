@@ -3,6 +3,7 @@ import { Banner } from '../../components/ui/Banner'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
 import { useOnboardingStatus } from '../onboarding/useOnboardingStatus'
+import { useDisplayUnit } from '../settings/useDisplayUnit'
 import { ClockLegend } from './ClockLegend'
 import { DayClock } from './DayClock'
 import { EstimateBanners } from './EstimateBanners'
@@ -115,6 +116,7 @@ interface TodayContentProps {
  */
 function TodayContent({ childId, childName, dayStart, onOpenWeek, onOpenSettings }: TodayContentProps) {
   const today = new Date()
+  const unit = useDisplayUnit()
   const { data: events, isError, error } = useTodayEvents(childId, dayStart)
 
   // Live sync: reflect the other parent's logs/edits/deletes without a refresh.
@@ -131,7 +133,7 @@ function TodayContent({ childId, childName, dayStart, onOpenWeek, onOpenSettings
       )}
 
       <section className="mt-6 flex flex-col items-center gap-4">
-        <DayClock events={events ?? []} date={today} dayStart={dayStart} />
+        <DayClock events={events ?? []} date={today} dayStart={dayStart} unit={unit} />
         <ClockLegend />
       </section>
 

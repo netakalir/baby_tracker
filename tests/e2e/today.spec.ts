@@ -206,6 +206,50 @@ test.describe('Today screen - start/stop timers', () => {
     await expect(page.getByRole('img', { name: /האכלה מ-.*עדיין בתהליך/ })).toBeVisible()
   })
 
+  test('a bottle amount is displayed in the viewer\'s chosen unit (oz)', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    const family = await factory.seedFamilyWithChild(user, { childName: 'יעל' })
+
+    // A completed bottle feed with a canonical 120 ml stored on the event. The
+    // window is anchored to the real day boundary so it always falls in "today".
+    const dayStartMs = new Date(deviceDayBounds().startIso).getTime()
+    const feedStart = Math.max(dayStartMs + 1_000, Date.now() - 30 * 60_000)
+    await factory.seedEvents(user, family.childId, [
+      {
+        type: 'feeding',
+        start_time: new Date(feedStart).toISOString(),
+        end_time: new Date(feedStart + 15 * 60_000).toISOString(),
+        metadata: { feeding_type: 'bottle', amount: 120 },
+      },
+    ])
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    // Default preference is ml, so the stored 120 ml renders as "120 מ״ל".
+    await expect(page.getByRole('img', { name: /האכלה · בקבוק · 120 מ״ל/ })).toBeVisible()
+
+    // Switching the per-user unit preference to ounces converts the SAME stored
+    // 120 ml for display only (120 / 29.5735 ≈ 4.1) - the value is never mutated.
+    await page.goto('/settings/display')
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().includes('/user_preferences') && response.request().method() !== 'GET',
+      ),
+      page
+        .getByRole('radiogroup', { name: 'יחידות מדידה' })
+        .getByRole('radio', { name: 'אונקיות' })
+        .click(),
+    ])
+
+    await page.goto('/today')
+    await expect(page.getByRole('img', { name: /האכלה · בקבוק · 4\.1 אונ׳/ })).toBeVisible()
+  })
+
   test('sleep is started from its button and drawn as an in-progress arc', async ({
     page,
     factory,

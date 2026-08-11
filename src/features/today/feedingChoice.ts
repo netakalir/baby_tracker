@@ -1,4 +1,5 @@
-import type { BreastSide, FeedingMetadata } from '../../types/database'
+import { formatAmount } from '../../lib/units'
+import type { BreastSide, FeedingMetadata, MeasurementUnit } from '../../types/database'
 
 /**
  * The quick-pick options shown when starting a feeding: two breast sides and a
@@ -56,9 +57,13 @@ export const BOTTLE_AMOUNT_OPTIONS_ML: readonly number[] = Array.from(
   (_, index) => (index + 1) * 10,
 )
 
-/** Formats a millilitre amount as a short Hebrew label, e.g. "120 מ״ל". */
+/**
+ * Formats a millilitre amount as a short Hebrew ml label, e.g. "120 מ״ל". Used
+ * for the bottle-amount picker, whose presets are always chosen in ml (input
+ * stays in the canonical unit); viewer-facing display uses {@link formatAmount}.
+ */
 export function formatMilliliters(amount: number): string {
-  return `${amount} מ״ל`
+  return formatAmount(amount, 'ml')
 }
 
 /** Human-readable Hebrew label for a breast side (for the "last side" hint). */
@@ -69,14 +74,18 @@ export function breastSideLabel(side: BreastSide): string {
 /**
  * A short Hebrew detail for a feeding event's metadata - e.g. "הנקה · ימין" or
  * "בקבוק" - or null when the metadata predates the breast/bottle split. Used to
- * enrich the feeding event's label without turning it into a separate type.
+ * enrich the feeding event's label without turning it into a separate type. The
+ * bottle amount is shown in the viewer's chosen unit (`unit`, default ml).
  */
-export function feedingDetailLabel(metadata: Record<string, unknown> | null): string | null {
+export function feedingDetailLabel(
+  metadata: Record<string, unknown> | null,
+  unit: MeasurementUnit = 'ml',
+): string | null {
   if (!metadata) return null
   const feedingType = metadata.feeding_type
   if (feedingType === 'bottle') {
     const amount = metadata.amount
-    return typeof amount === 'number' ? `בקבוק · ${formatMilliliters(amount)}` : 'בקבוק'
+    return typeof amount === 'number' ? `בקבוק · ${formatAmount(amount, unit)}` : 'בקבוק'
   }
   if (feedingType === 'breast') {
     const side = metadata.side

@@ -10,6 +10,7 @@ import {
   nextDayIsLive,
   prevDateString,
 } from './historicalDate'
+import { useDisplayUnit } from '../settings/useDisplayUnit'
 import { deviceDayStartOnDate } from './todayDate'
 import { useDayEvents } from './useTodayEvents'
 
@@ -131,6 +132,7 @@ export function HistoricalDayView({
   dateString,
 }: HistoricalDayViewProps) {
   const navigate = useNavigate()
+  const unit = useDisplayUnit()
   const { data: events, isError, error } = useDayEvents(childId, dateString, dayStart)
 
   // An instant inside the selected child-day, for the clock's boundary math.
@@ -176,6 +178,7 @@ export function HistoricalDayView({
           dayStart={dayStart}
           readOnly
           emptyStateText={EMPTY_HISTORICAL_TEXT}
+          unit={unit}
         />
         <ClockLegend />
       </section>
