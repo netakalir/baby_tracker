@@ -35,7 +35,7 @@ const PREVIEW_EVENTS: Event[] = [
     start_time: isoOnDay('2026-07-22', '06:15'),
     end_time: isoOnDay('2026-07-22', '06:35'),
     created_by: 'u1',
-    metadata: { amount: 120 },
+    metadata: { amount_ml: 120, entered: { value: 120, unit: 'ml' } },
     created_at: isoOnDay('2026-07-22', '06:35'),
   },
   {
