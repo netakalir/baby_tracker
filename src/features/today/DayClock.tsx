@@ -1,5 +1,6 @@
 import { useId, useMemo, useState, type KeyboardEvent } from 'react'
 import type { Event, EventType } from '../../types/database'
+import type { Unit } from '../../lib/units'
 import { clipEventToDay, type DaySegment } from './clock/dayWindow'
 import { eventColor } from './clock/eventColors'
 import { minutesToAngle, pointOnCircle, strokeArcPath, type Point } from './clock/geometry'
@@ -29,6 +30,8 @@ interface DayClockProps {
   readOnly?: boolean
   /** Message shown when the day has no events at all (overrides the live copy). */
   emptyStateText?: string
+  /** The viewer's feeding-amount unit ('ml' | 'oz'), for the feeding detail label. */
+  displayUnit?: Unit
 }
 
 // --- Dimensions (viewBox units; the SVG scales responsively via CSS). ---
@@ -82,16 +85,16 @@ interface EventDescription {
  * (e.g. "האכלה · הנקה · ימין"). Feeding stays one type/color; the split is a
  * metadata detail surfaced only in the label.
  */
-function eventLabel(event: Event): string {
+function eventLabel(event: Event, displayUnit: Unit): string {
   const { label } = eventColor(event.type)
   if (event.type !== 'feeding') return label
-  const detail = feedingDetailLabel(event.metadata)
+  const detail = feedingDetailLabel(event.metadata, displayUnit)
   return detail ? `${label} · ${detail}` : label
 }
 
 /** Structured, human-readable summary of an event: its type and time details. */
-function describeEvent({ event, segment, isOngoing }: Drawable): EventDescription {
-  const label = eventLabel(event)
+function describeEvent({ event, segment, isOngoing }: Drawable, displayUnit: Unit): EventDescription {
+  const label = eventLabel(event, displayUnit)
   if (isOngoing) {
     const elapsed = formatDuration(event.start_time, new Date().toISOString())
     return { label, lines: [`מ-${formatIsraelTime(event.start_time)}`, `בתהליך · ${elapsed}`] }
@@ -114,8 +117,8 @@ function describeEvent({ event, segment, isOngoing }: Drawable): EventDescriptio
  * compact centre readout, so it reads clearly aloud (e.g. "שינה מ-22:40 עד
  * 06:10, משך 7ש׳ 30ד׳" rather than "22:40–06:10 · 7ש׳ 30ד׳").
  */
-function ariaLabelFor({ event, segment, isOngoing }: Drawable): string {
-  const label = eventLabel(event)
+function ariaLabelFor({ event, segment, isOngoing }: Drawable, displayUnit: Unit): string {
+  const label = eventLabel(event, displayUnit)
   if (isOngoing) {
     const elapsed = formatDuration(event.start_time, new Date().toISOString())
     return `${label} מ-${formatIsraelTime(event.start_time)}, עדיין בתהליך (${elapsed})`
@@ -136,6 +139,7 @@ export function DayClock({
   onArcClick,
   readOnly = false,
   emptyStateText = EMPTY_STATE_TEXT,
+  displayUnit = 'ml',
 }: DayClockProps) {
   // useId gives stable, collision-free ids so multiple clocks can coexist on a page.
   const idPrefix = useId().replace(/[^a-zA-Z0-9_-]/g, '')
@@ -186,7 +190,7 @@ export function DayClock({
     // Pointer/focus handlers surface the centre readout on every element,
     // whether or not the clock is in editable (onArcClick) mode.
     const shared = {
-      'aria-label': ariaLabelFor(drawable),
+      'aria-label': ariaLabelFor(drawable, displayUnit),
       tabIndex: 0,
       className: 'cursor-pointer focus:outline-none',
       onMouseEnter: show,
@@ -393,7 +397,7 @@ export function DayClock({
               exact start/end/duration - the arcs alone only show position. */}
           {activeDrawable &&
             (() => {
-              const { label, lines } = describeEvent(activeDrawable)
+              const { label, lines } = describeEvent(activeDrawable, displayUnit)
               const allLines = [label, ...lines]
               const lineHeight = 14
               const firstLineY = CENTER.y - ((allLines.length - 1) * lineHeight) / 2

@@ -11,6 +11,7 @@ import {
   prevDateString,
 } from './historicalDate'
 import { deviceDayStartOnDate } from './todayDate'
+import { useDisplayUnit } from './useDisplayUnit'
 import { useDayEvents } from './useTodayEvents'
 
 /** "יום שלישי, 18 ביוני" for a `YYYY-MM-DD` date, formatted from a noon-UTC instant. */
@@ -131,6 +132,7 @@ export function HistoricalDayView({
   dateString,
 }: HistoricalDayViewProps) {
   const navigate = useNavigate()
+  const displayUnit = useDisplayUnit()
   const { data: events, isError, error } = useDayEvents(childId, dateString, dayStart)
 
   // An instant inside the selected child-day, for the clock's boundary math.
@@ -176,6 +178,7 @@ export function HistoricalDayView({
           dayStart={dayStart}
           readOnly
           emptyStateText={EMPTY_HISTORICAL_TEXT}
+          displayUnit={displayUnit}
         />
         <ClockLegend />
       </section>

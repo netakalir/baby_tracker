@@ -1,4 +1,5 @@
 import type { BreastSide, FeedingMetadata } from '../../types/database'
+import { formatForDisplay, stepFor, type FeedingAmount, type Unit } from '../../lib/units'
 
 /**
  * The quick-pick options shown when starting a feeding: two breast sides and a
@@ -46,19 +47,51 @@ const LAST_SIDE_KEY = 'baby-tracker:feeding:last-side'
 
 const SIDE_LABELS: Record<BreastSide, string> = { left: 'שמאל', right: 'ימין' }
 
-/**
- * Bottle amount presets in millilitres, offered as a scroll list when a bottle
- * feed is stopped. Covers 10-300 ml in 10 ml steps - the practical range for a
- * baby bottle - so the parent scrolls to the amount instead of typing it.
- */
-export const BOTTLE_AMOUNT_OPTIONS_ML: readonly number[] = Array.from(
-  { length: 30 },
-  (_, index) => (index + 1) * 10,
-)
+/** Hebrew unit labels appended after a numeric feeding amount, per display unit. */
+const UNIT_LABELS: Record<Unit, string> = {
+  ml: 'מ״ל',
+  oz: 'אונקיות',
+}
 
-/** Formats a millilitre amount as a short Hebrew label, e.g. "120 מ״ל". */
-export function formatMilliliters(amount: number): string {
-  return `${amount} מ״ל`
+/**
+ * Bottle amount presets offered as a scroll list when a bottle feed is stopped,
+ * expressed in the viewer's display unit and stepped so values stay "clean" in
+ * that unit (spec Input UX): 10-300 ml in 10 ml steps, or 0.5-10 oz in
+ * `stepFor('oz')` (0.5) steps - the practical range for a baby bottle.
+ */
+export function bottleAmountOptions(unit: Unit): readonly number[] {
+  if (unit === 'oz') {
+    return Array.from({ length: 20 }, (_, index) => (index + 1) * stepFor('oz'))
+  }
+  return Array.from({ length: 30 }, (_, index) => (index + 1) * 10)
+}
+
+/** Formats a raw amount already expressed in `unit` as a short Hebrew label. */
+export function formatAmountInUnit(value: number, unit: Unit): string {
+  return `${value} ${UNIT_LABELS[unit]}`
+}
+
+/** Formats a stored canonical feeding amount as a Hebrew label in the viewer's unit. */
+export function formatFeedingAmount(amount: FeedingAmount, viewUnit: Unit): string {
+  return `${formatForDisplay(amount, viewUnit)} ${UNIT_LABELS[viewUnit]}`
+}
+
+/** Narrows a `metadata` object to the canonical {@link FeedingAmount} shape, or null. */
+function readFeedingAmount(metadata: Record<string, unknown>): FeedingAmount | null {
+  const amountMl = metadata.amount_ml
+  if (typeof amountMl !== 'number') return null
+  const entered = metadata.entered
+  if (typeof entered === 'object' && entered !== null) {
+    const record = entered as Record<string, unknown>
+    const value = record.value
+    const unit = record.unit
+    if (typeof value === 'number' && (unit === 'ml' || unit === 'oz')) {
+      return { amount_ml: amountMl, entered: { value, unit } }
+    }
+  }
+  // Defensive fallback for records missing a valid `entered`: treat the canonical
+  // millilitre value as the entry, so an amount still displays rather than blanks.
+  return { amount_ml: amountMl, entered: { value: amountMl, unit: 'ml' } }
 }
 
 /** Human-readable Hebrew label for a breast side (for the "last side" hint). */
@@ -71,12 +104,15 @@ export function breastSideLabel(side: BreastSide): string {
  * "בקבוק" - or null when the metadata predates the breast/bottle split. Used to
  * enrich the feeding event's label without turning it into a separate type.
  */
-export function feedingDetailLabel(metadata: Record<string, unknown> | null): string | null {
+export function feedingDetailLabel(
+  metadata: Record<string, unknown> | null,
+  displayUnit: Unit,
+): string | null {
   if (!metadata) return null
   const feedingType = metadata.feeding_type
   if (feedingType === 'bottle') {
-    const amount = metadata.amount
-    return typeof amount === 'number' ? `בקבוק · ${formatMilliliters(amount)}` : 'בקבוק'
+    const amount = readFeedingAmount(metadata)
+    return amount ? `בקבוק · ${formatFeedingAmount(amount, displayUnit)}` : 'בקבוק'
   }
   if (feedingType === 'breast') {
     const side = metadata.side
