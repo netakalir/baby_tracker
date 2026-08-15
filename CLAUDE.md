@@ -12,6 +12,9 @@ The user (Netanel) is an experienced fullstack developer (Java/Spring/MongoDB + 
 - **Sharing between parents is a core requirement** - both parents (or a caregiver) need to see and log to the same data, from any device
 - **Design tone**: one consistent design system applied across every screen (colors, typography, spacing). Professional and distinctive, not generic/template-looking - but animations must be minimal and purely functional (brief feedback on tap), never decorative. The bar is "looks impressive but never busy or distracting"
 
+## CRITICAL: Never extract secrets or credentials (applies to Claude Code AND every subagent)
+Never read, extract, copy, or write out any credential — including the GitHub token from the macOS keychain / git credential helper, Supabase keys, or any `.env` value — to a file, script, argument, or anywhere else, under any circumstance, even temporarily and even if cleaned up afterward. If a needed tool (e.g. `gh`) is missing, STOP and report it — do not improvise around it by touching a secret. Opening PRs is done only via `gh` or the built-in GitHub tooling, never by pulling the token out of the keychain.
+
 ## CRITICAL: Code Quality Standard (applies to every single task, no exceptions)
 All code built for this project - by Claude Code or otherwise - must be professional, consistent, and uncompromising in quality. Follow widely-accepted conventions and high standards (naming, structure, error handling, typing) at all times throughout the entire project. This is a standing instruction that overrides any temptation to take shortcuts for speed. This includes secrets handling: the Supabase project URL and anon key live only in a `.env` file, which is explicitly listed in `.gitignore` - never hardcoded in source or committed to the repo.
 
