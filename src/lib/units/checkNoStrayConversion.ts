@@ -7,13 +7,18 @@ import { readdir, readFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const SRC_DIR = fileURLToPath(new URL('../src', import.meta.url))
-const ALLOWED = fileURLToPath(new URL('../src/lib/units/index.ts', import.meta.url))
+const SRC_DIR = fileURLToPath(new URL('../../', import.meta.url))
+// The module that legitimately owns the constant, plus this guard itself
+// (its FORBIDDEN list necessarily contains the literal it hunts for).
+const ALLOWED = new Set([
+  fileURLToPath(new URL('./index.ts', import.meta.url)),
+  fileURLToPath(new URL('./checkNoStrayConversion.ts', import.meta.url)),
+])
 
 /** Literal exact constant and the loose prefix the spec calls out. */
 const FORBIDDEN = ['29.5735295625', '29.57']
 
-async function collectFiles(dir) {
+async function collectFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true })
   const files = await Promise.all(
     entries.map((entry) => {
@@ -24,12 +29,12 @@ async function collectFiles(dir) {
   return files.flat()
 }
 
-/** @returns {Promise<string[]>} src-relative paths that contain the constant. */
-export async function findStrayConversionFiles() {
+/** @returns src-relative paths that contain the forbidden conversion constant. */
+export async function findStrayConversionFiles(): Promise<string[]> {
   const files = await collectFiles(SRC_DIR)
-  const offenders = []
+  const offenders: string[] = []
   for (const path of files) {
-    if (path === ALLOWED) continue
+    if (ALLOWED.has(path)) continue
     const contents = await readFile(path, 'utf8')
     if (FORBIDDEN.some((needle) => contents.includes(needle))) {
       offenders.push(relative(SRC_DIR, path))

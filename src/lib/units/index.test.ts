@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findStrayConversionFiles } from '../../../scripts/check-no-stray-conversion.mjs'
+import { findStrayConversionFiles } from './checkNoStrayConversion'
 import {
   fromCanonicalMl,
   makeFeedingAmount,
