@@ -41,16 +41,22 @@ describe('round-trip: enter -> store -> display in same unit is byte-identical',
 })
 
 describe('aggregation: total converts summed ml once, not per-record', () => {
-  it('formatTotal equals convert(sum(amount_ml))', () => {
+  it('formatTotal converts the summed ml once (independently hand-computed)', () => {
+    // Hand-computed against the ml<->oz factor (defined only in index.ts):
+    //   4 oz  -> round(118.294..) = 118 ml
+    //   3 oz  -> round( 88.721..) =  89 ml
+    //   100 ml (entered in ml)    = 100 ml
+    // sum = 307 ml. As oz that is 10.3809.. oz, snapped to the nearest 0.5
+    // grid -> 10.5. Expectation is a literal, NOT re-derived via the
+    // module's constants/functions.
     const records = [
       makeFeedingAmount(4, 'oz'),
       makeFeedingAmount(3, 'oz'),
       makeFeedingAmount(100, 'ml'),
     ]
     const totalMl = records.reduce((sum, r) => sum + r.amount_ml, 0)
-    expect(formatTotal(totalMl, 'oz')).toBe(
-      String(Number(snapToGrid(fromCanonicalMl(totalMl, 'oz'), 'oz').toFixed(2))),
-    )
+    expect(totalMl).toBe(307)
+    expect(formatTotal(totalMl, 'oz')).toBe('10.5')
   })
 
   it('diverges from summing per-record converted+rounded values', () => {
