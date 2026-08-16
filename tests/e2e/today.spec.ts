@@ -167,13 +167,21 @@ test.describe('Today screen - start/stop timers', () => {
     // Switch the viewer's display unit to ounces (a per-user preference). The
     // amount picker and the feeding label must then work in oz, stepped by 0.5.
     await page.goto('/settings/display')
-    await page
+    const ozRadio = page
       .getByRole('radiogroup', { name: 'יחידות מדידה' })
       .getByRole('radio', { name: 'אונקיות' })
-      .click()
-    await expect(
-      page.getByRole('radiogroup', { name: 'יחידות מדידה' }).getByRole('radio', { name: 'אונקיות' }),
-    ).toHaveAttribute('aria-checked', 'true')
+    // Wait for the preference to actually persist before reloading Today: the
+    // next navigation is a full reload that refetches units from the DB, so the
+    // write must land first (otherwise Today renders with the stale 'ml' unit).
+    const unitsSaved = page.waitForResponse(
+      (response) =>
+        response.url().includes('/rest/v1/user_preferences') &&
+        response.request().method() !== 'GET' &&
+        response.ok(),
+    )
+    await ozRadio.click()
+    await expect(ozRadio).toHaveAttribute('aria-checked', 'true')
+    await unitsSaved
 
     await page.goto('/today')
     await expect(page).toHaveURL(/\/today$/)
