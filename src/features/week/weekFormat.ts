@@ -1,18 +1,19 @@
 /**
- * Compact, Israel-local formatting for the week charts. Kept separate from the
+ * Compact, device-local formatting for the week charts. Kept separate from the
  * clock's `timeFormat` (which formats instants) because these format *spans*,
  * *counts* and *calendar days* for the week's axes and summary line.
  */
 
-const ISRAEL_TIME_ZONE = 'Asia/Jerusalem'
+/** The zone the viewing device is set to, resolved client-side (see todayDate.ts). */
+const DEVICE_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 const weekdayFormatter = new Intl.DateTimeFormat('he-IL', {
-  timeZone: ISRAEL_TIME_ZONE,
+  timeZone: DEVICE_TIME_ZONE,
   weekday: 'short',
 })
 
 const dayOfMonthFormatter = new Intl.DateTimeFormat('he-IL', {
-  timeZone: ISRAEL_TIME_ZONE,
+  timeZone: DEVICE_TIME_ZONE,
   day: 'numeric',
 })
 
