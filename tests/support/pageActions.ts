@@ -14,4 +14,8 @@ export async function signIn(
   await page.locator('#email').fill(user.email)
   await page.locator('#password').fill(user.password)
   await page.locator('button[type="submit"]').click()
+  // Wait for the post-login redirect to settle before returning, so callers can
+  // safely navigate straight to a protected route without racing the auth
+  // session restore (a bare goto otherwise bounces back to /auth).
+  await page.waitForURL((url) => !url.pathname.startsWith('/auth'))
 }
