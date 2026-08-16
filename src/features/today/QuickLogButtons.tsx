@@ -5,16 +5,18 @@ import type { Event, EventType, FeedingMetadata } from '../../types/database'
 import type { ImmediateEventType, TimerEventType } from './api'
 import { eventColor } from './clock/eventColors'
 import {
-  BOTTLE_AMOUNT_OPTIONS_ML,
   FEEDING_CHOICES,
   breastSideLabel,
-  formatMilliliters,
+  bottleAmountOptions,
+  formatAmountInUnit,
   readLastBreastSide,
   writeLastBreastSide,
   type FeedingChoice,
 } from './feedingChoice'
+import { makeFeedingAmount, type Unit } from '../../lib/units'
 import { formatStopwatch } from './clock/timeFormat'
 import { MOOD_OPTIONS } from './moodOptions'
+import { useDisplayUnit } from './useDisplayUnit'
 import { useLogImmediateEvent, useStartTimerEvent, useStopTimerEvent } from './useTodayEvents'
 
 interface QuickLogButtonsProps {
@@ -223,15 +225,20 @@ function FeedingChoiceMenu({ disabled, onSelect }: FeedingChoiceMenuProps) {
 
 interface FeedingAmountMenuProps {
   disabled: boolean
-  onSelect: (amountMl: number | null) => void
+  /** The viewer's display unit; options are stepped and labelled in this unit. */
+  displayUnit: Unit
+  /** Receives the chosen amount expressed in `displayUnit`, or null when skipped. */
+  onSelect: (value: number | null) => void
 }
 
 /**
- * A scrollable millilitre picker shown when a bottle feed is stopped, so the
- * parent can record how much the baby drank. "דלג" stops the feed without an
+ * A scrollable amount picker shown when a bottle feed is stopped, so the parent
+ * can record how much the baby drank. Options are stepped in the viewer's unit
+ * (ml or oz), keeping entered values clean. "דלג" stops the feed without an
  * amount - the amount is optional, keeping the fast path free of a form.
  */
-function FeedingAmountMenu({ disabled, onSelect }: FeedingAmountMenuProps) {
+function FeedingAmountMenu({ disabled, displayUnit, onSelect }: FeedingAmountMenuProps) {
+  const options = bottleAmountOptions(displayUnit)
   return (
     <div
       role="menu"
@@ -240,16 +247,16 @@ function FeedingAmountMenu({ disabled, onSelect }: FeedingAmountMenuProps) {
     >
       <p className="px-1 pb-0.5 text-center text-xs text-neutral-500">כמה שתה?</p>
       <div className="flex max-h-44 flex-col gap-1 overflow-y-auto">
-        {BOTTLE_AMOUNT_OPTIONS_ML.map((amountMl) => (
+        {options.map((value) => (
           <button
-            key={amountMl}
+            key={value}
             type="button"
             role="menuitem"
-            onClick={() => onSelect(amountMl)}
+            onClick={() => onSelect(value)}
             disabled={disabled}
             className="rounded-xl px-3 py-2 text-center text-sm font-medium tabular-nums text-neutral-700 transition-transform duration-fast active:scale-95 hover:bg-feeding-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-feeding-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {formatMilliliters(amountMl)}
+            {formatAmountInUnit(value, displayUnit)}
           </button>
         ))}
       </div>
@@ -270,6 +277,7 @@ export function QuickLogButtons({ childId, events, disabled = false }: QuickLogB
   const logMutation = useLogImmediateEvent(childId)
   const startTimerMutation = useStartTimerEvent(childId)
   const stopTimerMutation = useStopTimerEvent(childId)
+  const displayUnit = useDisplayUnit()
   const [isMoodOpen, setIsMoodOpen] = useState(false)
   const [isFeedingOpen, setIsFeedingOpen] = useState(false)
   const [isAmountOpen, setIsAmountOpen] = useState(false)
@@ -364,14 +372,14 @@ export function QuickLogButtons({ childId, events, disabled = false }: QuickLogB
   }
 
   /** Records the chosen bottle amount (or none, when skipped) and stops the feed. */
-  function handleFeedingAmountSelect(amountMl: number | null) {
+  function handleFeedingAmountSelect(value: number | null) {
     setIsAmountOpen(false)
     if (!feedingEvent) return
 
     const metadata =
-      amountMl === null
+      value === null
         ? undefined
-        : { ...feedingEvent.metadata, amount: amountMl }
+        : { ...feedingEvent.metadata, ...makeFeedingAmount(value, displayUnit) }
 
     stopTimerMutation.mutate(
       { eventId: feedingEvent.id, metadata },
@@ -405,7 +413,11 @@ export function QuickLogButtons({ childId, events, disabled = false }: QuickLogB
           <div className="relative flex flex-col items-center">
             {isFeedingOpen && <FeedingChoiceMenu disabled={isPending} onSelect={handleFeedingSelect} />}
             {isAmountOpen && (
-              <FeedingAmountMenu disabled={isPending} onSelect={handleFeedingAmountSelect} />
+              <FeedingAmountMenu
+                disabled={isPending}
+                displayUnit={displayUnit}
+                onSelect={handleFeedingAmountSelect}
+              />
             )}
 
             <TimerButton

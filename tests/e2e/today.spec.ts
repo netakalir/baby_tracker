@@ -154,6 +154,55 @@ test.describe('Today screen - start/stop timers', () => {
     await expect(page.getByRole('img', { name: /האכלה · בקבוק · 120 מ״ל/ })).toBeVisible()
   })
 
+  test('a bottle amount entered in ounces is picked and displayed in ounces', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'עמית' })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    // Switch the viewer's display unit to ounces (a per-user preference). The
+    // amount picker and the feeding label must then work in oz, stepped by 0.5.
+    await page.goto('/settings/display')
+    const ozRadio = page
+      .getByRole('radiogroup', { name: 'יחידות מדידה' })
+      .getByRole('radio', { name: 'אונקיות' })
+    // Wait for the preference to actually persist before reloading Today: the
+    // next navigation is a full reload that refetches units from the DB, so the
+    // write must land first (otherwise Today renders with the stale 'ml' unit).
+    const unitsSaved = page.waitForResponse(
+      (response) =>
+        response.url().includes('/rest/v1/user_preferences') &&
+        response.request().method() !== 'GET' &&
+        response.ok(),
+    )
+    await ozRadio.click()
+    await expect(ozRadio).toHaveAttribute('aria-checked', 'true')
+    await unitsSaved
+
+    await page.goto('/today')
+    await expect(page).toHaveURL(/\/today$/)
+
+    // Start a bottle feed, then stop it to open the (now oz-aware) amount picker.
+    await page.getByRole('button', { name: 'התחלת האכלה' }).click()
+    const feedingMenu = page.getByRole('menu', { name: 'בחירת אופן האכלה' })
+    await feedingMenu.getByRole('menuitem', { name: 'בקבוק' }).click()
+    await page.getByRole('button', { name: 'עצירת האכלה' }).click()
+
+    const amountMenu = page.getByRole('menu', { name: 'בחירת כמות בקבוק' })
+    await expect(amountMenu).toBeVisible()
+
+    // Options are labelled in ounces; the entered value is preserved verbatim
+    // (Decision 2), so a 4-oz pick reads back as exactly "4 אונקיות".
+    await amountMenu.getByRole('menuitem', { name: '4 אונקיות' }).click()
+    await expect(amountMenu).toBeHidden()
+    await expect(page.getByRole('status')).toHaveText('נרשמה האכלה')
+    await expect(page.getByRole('img', { name: /האכלה · בקבוק · 4 אונקיות/ })).toBeVisible()
+  })
+
   test('a breastfeed is drawn as one feeding arc and labels its side', async ({
     page,
     factory,

@@ -9,6 +9,7 @@ import { EstimateBanners } from './EstimateBanners'
 import { HistoricalDayView } from './HistoricalDayView'
 import { resolveTodayMode } from './historicalDate'
 import { QuickLogButtons } from './QuickLogButtons'
+import { useDisplayUnit } from './useDisplayUnit'
 import { useTodayEvents } from './useTodayEvents'
 import { useTodayEventsRealtime } from './useTodayEventsRealtime'
 
@@ -115,6 +116,7 @@ interface TodayContentProps {
  */
 function TodayContent({ childId, childName, dayStart, onOpenWeek, onOpenSettings }: TodayContentProps) {
   const today = new Date()
+  const displayUnit = useDisplayUnit()
   const { data: events, isError, error } = useTodayEvents(childId, dayStart)
 
   // Live sync: reflect the other parent's logs/edits/deletes without a refresh.
@@ -131,7 +133,7 @@ function TodayContent({ childId, childName, dayStart, onOpenWeek, onOpenSettings
       )}
 
       <section className="mt-6 flex flex-col items-center gap-4">
-        <DayClock events={events ?? []} date={today} dayStart={dayStart} />
+        <DayClock events={events ?? []} date={today} dayStart={dayStart} displayUnit={displayUnit} />
         <ClockLegend />
       </section>
 

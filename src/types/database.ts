@@ -4,6 +4,8 @@
  * Keep in sync manually until a generated-types pipeline is set up.
  */
 
+import type { FeedingAmount } from '../lib/units'
+
 export type FamilyMemberRole = 'parent'
 
 export type EventType = 'sleep' | 'feeding' | 'diaper' | 'mood'
@@ -23,8 +25,16 @@ export interface FeedingMetadata {
   feeding_type: FeedingType
   /** Present only when `feeding_type === 'breast'`. */
   side?: BreastSide
-  /** Optional amount, mainly for bottle feeds (future expansion). */
-  amount?: number
+  /**
+   * Canonical amount in millilitres (integer), the single source of truth for all
+   * math/aggregation. Present mainly for bottle feeds. See the unit-of-measure spec.
+   */
+  amount_ml?: number
+  /**
+   * What the user actually entered, preserved verbatim (source fidelity) so the
+   * entering unit is displayed without conversion drift.
+   */
+  entered?: FeedingAmount['entered']
 }
 
 export interface Family {
