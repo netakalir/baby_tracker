@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Dark mode is driven by a `dark` class on <html> (toggled by ThemeProvider),
+   not the OS media query, so the stored user preference is authoritative. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* Brand */
   --color-brand-50: #f2f1fc;
@@ -23,6 +27,11 @@
   --color-error-500: #dc2626;
   --color-error-50: #fef2f2;
   --color-success-500: #16a34a;
+
+  /* Ink that sits on top of a solid accent fill (brand/event/error/success
+     buttons). Always white in BOTH themes, so it is a separate token from
+     `neutral-0` (which flips to a dark surface in dark mode). */
+  --color-on-accent: #ffffff;
 
   /* Event-type colors (one per type, reused everywhere: buttons, clock, charts).
      Defined here once, when the Today screen is built (see design-system skill).
@@ -78,4 +87,35 @@ body {
   color: var(--color-neutral-900);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Dark theme — a deliberate remap of the SAME semantic tokens, not ad-hoc
+   per-component colors. Utilities like `bg-neutral-0` / `text-neutral-900`
+   resolve through these variables, so overriding them here re-themes the whole
+   app chrome and screens at once. Brand and event-type accents keep their hue
+   (the one-color-per-event-type rule holds in both themes); only the neutral
+   ramp inverts and the tinted `-50` fills get dark equivalents so they don't
+   glow against the dark chrome. */
+.dark {
+  color-scheme: dark;
+
+  /* Neutral ramp inverted: 50 = page background, 0 = elevated surface (cards,
+     sticky bars) kept a step lighter than the page for functional elevation. */
+  --color-neutral-0: #211e1b;
+  --color-neutral-50: #15120f;
+  --color-neutral-100: #2a2624;
+  --color-neutral-200: #3a3431;
+  --color-neutral-400: #8a827c;
+  --color-neutral-600: #b4aca6;
+  --color-neutral-800: #e7e5e4;
+  --color-neutral-900: #f6f5f3;
+
+  /* Tinted `-50` surfaces and the info-banner text, remapped for a dark base. */
+  --color-brand-50: #201f33;
+  --color-brand-700: #c7c4f2;
+  --color-error-50: #2b1616;
+  --color-sleep-50: #12233d;
+  --color-feeding-50: #33220f;
+  --color-diaper-50: #0c2a30;
+  --color-mood-50: #2c1533;
 }
