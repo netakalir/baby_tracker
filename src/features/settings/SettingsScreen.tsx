@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { appCommitSha, formatVersionLabel } from '../../lib/appVersion'
 import { useSignOut } from '../auth/useSignOut'
 import { SettingsHeader } from './SettingsHeader'
 
@@ -82,6 +83,17 @@ export function SettingsScreen() {
         >
           {signOutMutation.isPending ? 'רגע...' : 'התנתקות'}
         </button>
+
+        {/* Quiet "about" line: the running app version, so bug reports from beta
+            users can be correlated with a build. The commit SHA (when the build
+            had git available) rides along in the title for support, without
+            cluttering the visible line. */}
+        <p
+          className="mt-6 text-center text-xs text-neutral-400"
+          title={appCommitSha ? `build ${appCommitSha}` : undefined}
+        >
+          {formatVersionLabel()}
+        </p>
       </div>
     </div>
   )
