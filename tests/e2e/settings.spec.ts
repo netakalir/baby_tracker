@@ -33,6 +33,10 @@ test.describe('Settings hub', () => {
       await expect(page).toHaveURL(/\/settings$/)
     }
 
+    // A quiet version/"about" line sits at the bottom of the hub so beta
+    // bug reports can be correlated with a build (sourced from package.json).
+    await expect(page.getByText(/^גרסה \d+\.\d+\.\d+$/)).toBeVisible()
+
     // The back arrow returns to Today.
     await page.getByRole('button', { name: 'חזרה' }).click()
     await expect(page).toHaveURL(/\/today$/)

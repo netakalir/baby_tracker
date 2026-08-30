@@ -1,10 +1,40 @@
+import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// Single source of truth for the app version: the `version` field in
+// package.json. Injected at build time (see `define` below) so the frontend
+// never hardcodes a version string.
+const packageJsonPath = fileURLToPath(new URL('./package.json', import.meta.url))
+const { version: appVersion } = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as {
+  version: string
+}
+
+// Optional short commit SHA to correlate a running build with a commit. Git may
+// be unavailable (e.g. a source tarball or CI without history) — fall back to an
+// empty string rather than failing the build.
+function resolveCommitSha(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim()
+  } catch {
+    return ''
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
+  // Compile-time constants read through `src/lib/appVersion.ts` (not scattered
+  // `import.meta.env` reads). Stringified so they inline as string literals.
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+    __APP_COMMIT_SHA__: JSON.stringify(resolveCommitSha()),
+  },
   plugins: [
     react(),
     tailwindcss(),
