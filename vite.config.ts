@@ -34,12 +34,18 @@ const commitSha = resolveCommitSha()
 // `src/lib/monitoring.ts` so uploaded source maps match reported events.
 const sentryRelease = commitSha ? `${appVersion}+${commitSha}` : appVersion
 
+// Whether this build uploads source maps to Sentry — true only when a Sentry
+// auth token is present in the build env. Drives both the plugin and whether we
+// emit source maps at all (see `build.sourcemap` below), so a build without the
+// token behaves exactly as before this integration.
+const uploadSourceMaps = Boolean(process.env.SENTRY_AUTH_TOKEN)
+
 // Source-map upload plugin, activated ONLY when a Sentry auth token is present
 // in the build env. With no token the build proceeds unchanged (no plugin, no
 // error) — dev builds and contributors without Sentry access are unaffected.
 // The token/org/project are read from the environment and never logged.
 function sentrySourceMapsPlugin(): PluginOption {
-  if (!process.env.SENTRY_AUTH_TOKEN) {
+  if (!uploadSourceMaps) {
     return undefined
   }
   return sentryVitePlugin({
@@ -47,15 +53,21 @@ function sentrySourceMapsPlugin(): PluginOption {
     project: process.env.SENTRY_PROJECT,
     // Token is read from SENTRY_AUTH_TOKEN by the plugin; not passed explicitly.
     release: { name: sentryRelease },
+    // Delete the emitted `.map` files from `dist` after they are uploaded, so
+    // they reach Sentry but are never served publicly from production.
+    sourcemaps: { filesToDeleteAfterUpload: ['**/*.map'] },
   })
 }
 
 // https://vite.dev/config/
 export default defineConfig({
-  // Emit source maps so Sentry can symbolicate stack traces. They are uploaded
-  // to Sentry (when the plugin is active) rather than served publicly.
+  // Emit source maps ONLY when they will be uploaded to Sentry, and as `hidden`
+  // so no `//# sourceMappingURL` comment points at them. Combined with the
+  // plugin's post-upload deletion, maps reach Sentry (for symbolicated stack
+  // traces) but are never emitted or served publicly otherwise — a build with
+  // no Sentry auth token produces no maps at all, exactly as before.
   build: {
-    sourcemap: true,
+    sourcemap: uploadSourceMaps ? 'hidden' : false,
   },
   // Compile-time constants read through `src/lib/appVersion.ts` (not scattered
   // `import.meta.env` reads). Stringified so they inline as string literals.
