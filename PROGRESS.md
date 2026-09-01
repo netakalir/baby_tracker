@@ -159,6 +159,16 @@
 
 **נדחה לאפיון נפרד:** מדיניות תוקף טוקן (בדיקת תוקף במקום אימות בכל כניסה) — `screen-settings-spec.md §8`; ניקוי משפחות יתומות (מחיקת חבר אחרון).
 
+### Phase 0 — Beta hardening
+
+**Sentry error monitoring (issue #20) — ✅ קוד מוכן, טרם הופעל בפרודקשן.**
+נוסף ניטור שגיאות ל-Frontend (React) ול-Edge Functions (`estimates`, `delete-user`). **שגיאות בלבד** — ללא Session Replay וללא performance tracing (`tracesSampleRate: 0`), דרישת בטיחות PII (שמות תינוקות ב-UI). כל השליחה מגודרת: פועלת רק כאשר יש DSN **וגם** ה-environment הוא `production`/`integration`, כך ש-dev/test לעולם לא שולחים. `beforeSend` מנקה PII (email/username/ip, cookies, כותרות auth) בשני הצדדים; `sendDefaultPii: false`. נוסף `Sentry.ErrorBoundary` סביב עץ האפליקציה עם fallback על-פי מערכת העיצוב (במקום מסך לבן), ולכידת שגיאות Supabase/רשת דרך `QueryCache`/`MutationCache` ב-`queryClient` (מסננת מצבי auth צפויים). מפות מקור מועלות ל-Sentry ב-build רק כאשר `SENTRY_AUTH_TOKEN` קיים (אחרת ה-build רץ ללא שינוי).
+
+> **חוב הפעלה (Netanel צריך להגדיר משתני סביבה — אין ערכים אמיתיים בריפו):**
+> - **Vercel (Frontend):** `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT` (הגדר `production` בפרוד ו-`integration` באינטג'), ובנוסף לבנייה בלבד: `SENTRY_AUTH_TOKEN` (secret), `SENTRY_ORG`, `SENTRY_PROJECT` — להעלאת source maps.
+> - **Supabase (Edge Function secrets, דרך `supabase secrets set`):** `SENTRY_DSN`, `SENTRY_ENVIRONMENT`.
+> - שמות המשתנים מתועדים ב-`.env.example`. ה-Edge Functions לא נפרסו במסגרת משימה זו (`supabase functions deploy` יבוצע בנפרד).
+
 ### לא ב-MVP (שלבים עתידיים)
 - **Phase 2:** עקומות גדילה WHO + אבני דרך התפתחותיות
 - **Phase 3:** טאב "בריאות" (חיסונים, תורים, תזכורות) + מלאי

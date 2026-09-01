@@ -19,6 +19,7 @@
 // ============================================================
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { withSentry } from './sentry.ts'
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -33,7 +34,7 @@ function jsonResponse(body: unknown, status: number): Response {
   })
 }
 
-Deno.serve(async (req: Request): Promise<Response> => {
+const handleRequest = async (req: Request): Promise<Response> => {
   // Browser preflight.
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -84,4 +85,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   return jsonResponse({ success: true }, 200)
-})
+}
+
+// Wrapped so any uncaught error is reported to Sentry (no-op unless configured);
+// the response/CORS contract is unchanged.
+Deno.serve(withSentry(handleRequest))

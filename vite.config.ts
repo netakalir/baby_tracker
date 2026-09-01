@@ -1,7 +1,8 @@
 import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vite'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
+import { defineConfig, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -27,13 +28,40 @@ function resolveCommitSha(): string {
   }
 }
 
+const commitSha = resolveCommitSha()
+
+// The Sentry release identifier, kept in sync with `monitoringRelease` in
+// `src/lib/monitoring.ts` so uploaded source maps match reported events.
+const sentryRelease = commitSha ? `${appVersion}+${commitSha}` : appVersion
+
+// Source-map upload plugin, activated ONLY when a Sentry auth token is present
+// in the build env. With no token the build proceeds unchanged (no plugin, no
+// error) — dev builds and contributors without Sentry access are unaffected.
+// The token/org/project are read from the environment and never logged.
+function sentrySourceMapsPlugin(): PluginOption {
+  if (!process.env.SENTRY_AUTH_TOKEN) {
+    return undefined
+  }
+  return sentryVitePlugin({
+    org: process.env.SENTRY_ORG,
+    project: process.env.SENTRY_PROJECT,
+    // Token is read from SENTRY_AUTH_TOKEN by the plugin; not passed explicitly.
+    release: { name: sentryRelease },
+  })
+}
+
 // https://vite.dev/config/
 export default defineConfig({
+  // Emit source maps so Sentry can symbolicate stack traces. They are uploaded
+  // to Sentry (when the plugin is active) rather than served publicly.
+  build: {
+    sourcemap: true,
+  },
   // Compile-time constants read through `src/lib/appVersion.ts` (not scattered
   // `import.meta.env` reads). Stringified so they inline as string literals.
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
-    __APP_COMMIT_SHA__: JSON.stringify(resolveCommitSha()),
+    __APP_COMMIT_SHA__: JSON.stringify(commitSha),
   },
   plugins: [
     react(),
@@ -77,6 +105,9 @@ export default defineConfig({
         ],
       },
     }),
+    // Must come last so it sees the final built assets. Falsy when no auth token
+    // is set, in which case Vite simply ignores it.
+    sentrySourceMapsPlugin(),
   ],
   // Honor a port assigned via the PORT env var (used by the preview harness's
   // autoPort); fall back to Vite's default when it isn't set.
