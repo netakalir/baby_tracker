@@ -18,6 +18,9 @@ Never read, extract, copy, or write out any credential — including the GitHub 
 ## CRITICAL: Code Quality Standard (applies to every single task, no exceptions)
 All code built for this project - by Claude Code or otherwise - must be professional, consistent, and uncompromising in quality. Follow widely-accepted conventions and high standards (naming, structure, error handling, typing) at all times throughout the entire project. This is a standing instruction that overrides any temptation to take shortcuts for speed. This includes secrets handling: the Supabase project URL and anon key live only in a `.env` file, which is explicitly listed in `.gitignore` - never hardcoded in source or committed to the repo.
 
+## CRITICAL: Mandatory Code Review (applies to every task, no exceptions)
+No code is "done" — and no PR is opened or merged — until it has passed a rigorous, deep code review by the dedicated `code-reviewer` agent. This is not optional and not conditional on the user asking for it. After finishing any coding task (Claude Code's own or any subagent's), and before opening a PR, STOP and run the `code-reviewer` agent over the change. The review must be as demanding as that agent requires, and beyond: correctness, security (RLS/auth boundaries, PII, secrets), edge cases, error handling, typing, conventions, and reuse/simplification. Every finding is either fixed or explicitly justified to the user before merge — findings are never silently ignored. Verify (build/lint/typecheck/tests) is part of "done" but does NOT replace this review.
+
 ## Tech Stack (decided)
 - **Frontend**: React + TypeScript
 - **Backend/DB**: Supabase (BaaS) - Postgres + Auth + Realtime + Storage, **no custom backend server that we maintain**
