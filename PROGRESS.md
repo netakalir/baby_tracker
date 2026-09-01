@@ -1,5 +1,27 @@
 # סיכום התקדמות - Baby Tracker
-**תאריך עדכון אחרון:** 4 באוגוסט 2026
+**תאריך עדכון אחרון:** 1 בספטמבר 2026
+
+---
+
+## סביבות פריסה (Deployment Environments)
+
+האפליקציה פרוסה חיה על **Vercel** (אירוח סטטי של ה-Vite build; `vercel.json` מוסיף SPA rewrite כדי שניתובי React Router עמוקים/רענון לא יחזירו 404). פרויקט Vercel אחד מחובר לריפו, ומפריד בין הסביבות לפי scope של משתני env — **כל סביבה מדברת עם פרויקט Supabase נפרד** (בידוד DB אומת אובייקטיבית: כל פריסה צורבת `*.supabase.co` שונה).
+
+| סביבה | ענף | כתובת יציבה (Vercel) | פרויקט Supabase | scope של env |
+|---|---|---|---|---|
+| **production** | `main` | `baby-tracker-git-main-neta-team.vercel.app` (עד לחיבור `app.taliatracker.com`) | פרויקט **prod** (ייעודי, `#18`) | Production |
+| **integ** | `integ` | `baby-tracker-git-integ-neta-team.vercel.app` | פרויקט **הבדיקות** (משמש גם E2E) | Preview |
+
+**עקרונות שהוקבעו:**
+- **בידוד:** משתני `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` מוגדרים פעמיים ב-Vercel — Production→prod, Preview→בדיקות/integ. הערכים חיים רק בפאנל Vercel + ב-Supabase (לא בריפו). מסומנים כ-**Config** (ה-anon key ציבורי, לא Secret; ה-`service_role` לעולם לא בפרונטאנד).
+- **integ ממחזר את פרויקט הבדיקות** (אילוץ Free tier = 2 פרויקטים; כבר יש prod + בדיקות). בטוח כי ה-E2E מנקים רק את מה שהם יצרו לפי ID ([`tests/support/fixtures.ts`](tests/support/fixtures.ts)) ויוצרים משתמשים מאומתים-מראש דרך admin API (עוקפים מייל), כך שהגדרות Auth/SMTP של integ לא שוברות אותם. חיסרון מקובל: בלגן נתונים (`preview-*@example.com` מעורבב עם נתוני integ ידניים).
+- **כתובות:** לכל deploy יש כתובת immutable (hash, נצמדת לבנייה); לכל branch יש alias יציב שעוקב אחרי האחרון. ל-**Site URL** משתמשים תמיד ב**יציבה**, לא ב-hash.
+- **מיילים (Auth):** נשלחים דרך **Resend** (SMTP; דומיין `taliatracker.com` מאומת עם SPF/DKIM/DMARC ב-Cloudflare). `Site URL` + `Redirect URLs` מוגדרים בכל פרויקט Supabase בנפרד לכתובת היציבה של אותה סביבה. אומת מקצה-לקצה בשתי הסביבות (הרשמה → מייל → קישור נכון). חוב פתוח: דומיין חדש → מוניטין שליחה נמוך, חלק מהמיילים בספאם בהתחלה (משתפר עם הזמן + "not spam").
+
+**חובות/אופציונלי פתוחים בסביבות:**
+- תת-דומיינים מותאמים: `app.taliatracker.com` (prod) / `integ.taliatracker.com` (integ) — במקום ה-aliasים של Vercel.
+- Resend ייעודי לפרויקט הבדיקות (integ כרגע עשוי להישען על SMTP דיפולטי מוגבל-קצב).
+- error monitoring (Sentry), ערוץ פידבק + הערת פרטיות — ראה issues #20 / #22 ב-GitHub (רשימת Phase 0 לפריסה ל-beta).
 
 ---
 
