@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { adminClient } from '../support/adminClient'
 import { expect, test } from '../support/fixtures'
 import { signIn } from '../support/pageActions'
 import { testEnv } from '../support/testEnv'
@@ -57,8 +58,8 @@ test.describe('family sharing', () => {
       expiresAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     })
 
-    // An attacker who obtained an expired token, signed in, bypassing the
-    // client-side expiry check and claiming the invite straight through the API.
+    // An attacker who obtained an expired token signs in and tries to claim it
+    // straight through the API, bypassing any client-side expiry check.
     const attacker = await factory.createUser()
     const client = createClient(testEnv.supabaseUrl, testEnv.supabaseAnonKey, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -69,24 +70,20 @@ test.describe('family sharing', () => {
     })
     expect(signInError).toBeNull()
 
-    // Reading an invite by token is permitted, which yields its id.
-    const { data: invite, error: readError } = await client
-      .from('family_invites')
-      .select('id')
-      .eq('token', expiredToken)
-      .single<{ id: string }>()
-    expect(readError).toBeNull()
+    // The join is validated entirely in the database (join_family_by_token
+    // re-checks expiry under a row lock), so the claim is refused there.
+    const { error: joinError } = await client.rpc('join_family_by_token', {
+      p_token: expiredToken,
+    })
+    expect(joinError?.message).toBe('invite_expired')
 
-    // The claim must fail at the database: the RLS policy requires the invite
-    // to be both unused AND unexpired, so zero rows are updated.
-    const { data: claimed, error: claimError } = await client
+    // The invite is untouched: still unused, so a fresh (valid) link would work.
+    const { data: invite } = await adminClient
       .from('family_invites')
-      .update({ used_at: new Date().toISOString(), used_by: attacker.id })
-      .eq('id', invite.id)
-      .is('used_at', null)
-      .select()
-    expect(claimError).toBeNull()
-    expect(claimed).toEqual([])
+      .select('used_at, used_by')
+      .eq('token', expiredToken)
+      .single<{ used_at: string | null; used_by: string | null }>()
+    expect(invite).toEqual({ used_at: null, used_by: null })
 
     await client.auth.signOut()
   })

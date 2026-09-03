@@ -3,9 +3,19 @@ import { signIn } from '../support/pageActions'
 
 const HOUR_MS = 60 * 60 * 1000
 
-/** ISO timestamp `hours` before now — kept small so events land in today's week. */
+/**
+ * Frozen "now" for these tests — a fixed Wednesday, well clear of a
+ * Sunday–Saturday week boundary. `hoursAgo` offsets are small, but a real,
+ * moving `Date.now()` could still cross midnight into the previous week if
+ * the suite happened to run between 00:00–03:00 on a Sunday; freezing the
+ * clock removes that latent fragility entirely (see the analogous, and
+ * previously observed, failure in today-historical.spec.ts).
+ */
+const FIXED_NOW = new Date('2026-09-02T09:00:00')
+
+/** ISO timestamp `hours` before `FIXED_NOW` — kept small so events land in today's week. */
 function hoursAgo(hours: number): string {
-  return new Date(Date.now() - hours * HOUR_MS).toISOString()
+  return new Date(FIXED_NOW.getTime() - hours * HOUR_MS).toISOString()
 }
 
 async function openWeek(page: import('@playwright/test').Page): Promise<void> {
@@ -22,6 +32,7 @@ test.describe('Week screen', () => {
     const user = await factory.createUser()
     await factory.seedFamilyWithChild(user, { childName: 'עומר' })
 
+    await page.clock.setFixedTime(FIXED_NOW)
     await signIn(page, user)
     await openWeek(page)
 
@@ -47,6 +58,7 @@ test.describe('Week screen', () => {
       { type: 'feeding', start_time: hoursAgo(0.4), end_time: null },
     ])
 
+    await page.clock.setFixedTime(FIXED_NOW)
     await signIn(page, user)
     await openWeek(page)
 
@@ -81,6 +93,7 @@ test.describe('Week screen', () => {
     const partner = await factory.createUser()
     await factory.addMember(partner, family.familyId)
 
+    await page.clock.setFixedTime(FIXED_NOW)
     await signIn(page, partner)
     await openWeek(page)
 

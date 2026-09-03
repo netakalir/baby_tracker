@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { eventColor } from './clock/eventColors'
 import { RING_ORDER } from './clock/rings'
 
@@ -8,8 +9,12 @@ const LEGEND_TYPES = RING_ORDER
  * A compact color key for the clock. Ties each event-type color to its Hebrew
  * label so the arcs/dots on the dial are readable at a glance - deliberately
  * minimal (a dot + a word), never a busy panel.
+ *
+ * Memoised: it takes no props, so it never needs to re-render — in particular
+ * not on the Today screen's once-a-second timer tick, which re-renders its
+ * parent but must not cascade to this static key.
  */
-export function ClockLegend() {
+export const ClockLegend = memo(function ClockLegend() {
   return (
     <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5" aria-label="מקרא צבעים">
       {LEGEND_TYPES.map((type) => {
@@ -27,4 +32,4 @@ export function ClockLegend() {
       })}
     </ul>
   )
-}
+})

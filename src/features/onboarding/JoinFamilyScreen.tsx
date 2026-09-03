@@ -32,7 +32,7 @@ export function JoinFamilyScreen() {
   const [fieldError, setFieldError] = useState<string | undefined>()
 
   const mutation = useMutation({
-    mutationFn: (input: { token: string }) => joinFamilyByToken(user!.id, input),
+    mutationFn: (input: { token: string }) => joinFamilyByToken(input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['onboarding-status', user!.id] })
       navigate('/today')

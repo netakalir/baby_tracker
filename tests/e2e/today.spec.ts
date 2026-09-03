@@ -270,6 +270,56 @@ test.describe('Today screen - start/stop timers', () => {
     await expect(page.getByRole('img', { name: /שינה מ-.*עדיין בתהליך/ })).toBeVisible()
   })
 
+  test("a running timer's arc and readout advance live, once a second", async ({
+    page,
+    factory,
+  }) => {
+    // Regression guard (finding U1): the in-progress arc, its centre readout and
+    // its aria-label are drawn up to "now" and must keep advancing while a timer
+    // runs — not freeze until an unrelated refetch. We pin the browser clock to a
+    // fixed instant, seed a still-running sleep anchored to that SAME instant (so
+    // the elapsed time is skew-free regardless of network latency), then fast-
+    // forward wall-clock time and assert the shown elapsed grew by exactly that.
+    const user = await factory.createUser()
+    const family = await factory.seedFamilyWithChild(user, { childName: 'נועם' })
+
+    // Freeze the page clock at a fixed "now" before the app loads. Every browser
+    // `Date.now()` (the clock's tick, the arc's end, the readout) reads from this.
+    const fixedNow = Date.now()
+    await page.clock.install({ time: new Date(fixedNow) })
+
+    // A sleep still running, started a few minutes before `fixedNow` — but never
+    // before today's window opens (keeps it on today's clock at any time of day).
+    const dayStartMs = new Date(deviceDayBounds().startIso).getTime()
+    const sleepStart = Math.max(dayStartMs + 60_000, fixedNow - 3 * 60_000)
+    await factory.seedEvents(user, family.childId, [
+      { type: 'sleep', start_time: new Date(sleepStart).toISOString(), end_time: null },
+    ])
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    // The ongoing sleep arc carries the live elapsed time in its aria-label.
+    const arc = page.getByRole('img', { name: /שינה מ-.*עדיין בתהליך/ })
+    await expect(arc).toBeVisible()
+
+    // Elapsed minutes parsed from "...עדיין בתהליך (Xד׳)" (always < 1h here).
+    const elapsedMinutes = async (): Promise<number> => {
+      const label = (await arc.getAttribute('aria-label')) ?? ''
+      const match = label.match(/(\d+)ד׳/)
+      return match ? Number(match[1]) : NaN
+    }
+
+    const before = await elapsedMinutes()
+
+    // Advance wall-clock time by 10 minutes with no data change: the once-a-second
+    // tick must re-drive the arc/readout, so the elapsed grows by exactly 10.
+    await page.clock.fastForward('10:00')
+    await expect
+      .poll(elapsedMinutes, { message: 'the ongoing arc did not advance with the clock' })
+      .toBe(before + 10)
+  })
+
   test('an overnight sleep that crosses midnight is shown on today\'s clock', async ({
     page,
     factory,

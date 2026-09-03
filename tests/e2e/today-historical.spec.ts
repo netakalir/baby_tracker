@@ -3,9 +3,20 @@ import { signIn } from '../support/pageActions'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-/** The device-local calendar date (`YYYY-MM-DD`) `daysAgo` days before today. */
+/**
+ * Frozen "now" for these tests — a fixed Wednesday. The Week screen's
+ * Sunday–Saturday week boundary means "yesterday" must always land inside the
+ * *same* calendar week as "today"; picking a real, moving `Date.now()` would
+ * make the suite fail whenever it happened to run on a Sunday (yesterday =
+ * Saturday = the *previous* week). The clock is frozen (via `page.clock`) to
+ * this same instant before sign-in, so the app's own notion of "today"
+ * matches what these helpers compute.
+ */
+const FIXED_NOW = new Date('2026-09-02T09:00:00')
+
+/** The device-local calendar date (`YYYY-MM-DD`) `daysAgo` days before `FIXED_NOW`. */
 function daysAgoDateString(daysAgo: number): string {
-  const d = new Date(Date.now() - daysAgo * DAY_MS)
+  const d = new Date(FIXED_NOW.getTime() - daysAgo * DAY_MS)
   const year = d.getFullYear()
   const month = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
@@ -18,8 +29,8 @@ function atLocalHour(dateString: string, hour: number): string {
   return new Date(year, month - 1, day, hour, 0, 0).toISOString()
 }
 
-/** Backdates the child ten days so several past days are navigable. */
-const CHILD_CREATED_AT = new Date(Date.now() - 10 * DAY_MS).toISOString()
+/** Backdates the child ten days (from `FIXED_NOW`) so several past days are navigable. */
+const CHILD_CREATED_AT = new Date(FIXED_NOW.getTime() - 10 * DAY_MS).toISOString()
 
 test.describe('Today screen — historical mode (§9)', () => {
   test('a past date shows that day’s events, disabled logging and no estimate banners', async ({
@@ -38,6 +49,7 @@ test.describe('Today screen — historical mode (§9)', () => {
       { type: 'feeding', start_time: atLocalHour(yesterday, 8), end_time: atLocalHour(yesterday, 8) },
     ])
 
+    await page.clock.setFixedTime(FIXED_NOW)
     await signIn(page, user)
     await expect(page).toHaveURL(/\/today$/)
 
@@ -65,6 +77,7 @@ test.describe('Today screen — historical mode (§9)', () => {
     const user = await factory.createUser()
     await factory.seedFamilyWithChild(user, { childName: 'עדי', createdAt: CHILD_CREATED_AT })
 
+    await page.clock.setFixedTime(FIXED_NOW)
     await signIn(page, user)
     await page.goto(`/today?date=${daysAgoDateString(3)}`)
 
@@ -80,9 +93,10 @@ test.describe('Today screen — historical mode (§9)', () => {
     // Created exactly two days ago, so the earliest navigable day is two days back.
     await factory.seedFamilyWithChild(user, {
       childName: 'טל',
-      createdAt: new Date(Date.now() - 2 * DAY_MS).toISOString(),
+      createdAt: new Date(FIXED_NOW.getTime() - 2 * DAY_MS).toISOString(),
     })
 
+    await page.clock.setFixedTime(FIXED_NOW)
     await signIn(page, user)
 
     // Forward from yesterday reaches today → returns to the live view.
@@ -113,6 +127,7 @@ test.describe('Today screen — historical mode (§9)', () => {
       { type: 'sleep', start_time: atLocalHour(past, 2), end_time: atLocalHour(past, 4) },
     ])
 
+    await page.clock.setFixedTime(FIXED_NOW)
     await signIn(page, user)
     await page.getByRole('button', { name: 'שבוע' }).click()
     await expect(page).toHaveURL(/\/week$/)

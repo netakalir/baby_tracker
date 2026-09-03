@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { Estimate } from './estimates'
 import { useEstimates } from './useEstimates'
 
@@ -63,8 +64,17 @@ interface EstimateBannersProps {
   dayStart: string
 }
 
-/** Two thin information cards below the clock. Not interactive - info only. */
-export function EstimateBanners({ childId, dayStart }: EstimateBannersProps) {
+/**
+ * Two thin information cards below the clock. Not interactive - info only.
+ *
+ * Memoised on its `childId`/`dayStart` props so the Today screen's once-a-second
+ * timer tick (which re-renders the parent) does not needlessly re-render these
+ * cards — their data comes from `useEstimates`, unrelated to the live tick.
+ */
+export const EstimateBanners = memo(function EstimateBanners({
+  childId,
+  dayStart,
+}: EstimateBannersProps) {
   const { data, isLoading, isError } = useEstimates(childId, dayStart)
 
   return (
@@ -95,4 +105,4 @@ export function EstimateBanners({ childId, dayStart }: EstimateBannersProps) {
       })}
     </div>
   )
-}
+})

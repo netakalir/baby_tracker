@@ -46,6 +46,47 @@ function isReportingEnabled(): boolean {
   )
 }
 
+/** Marker left in place of a redacted query string or hash fragment. */
+const REDACTED = '[redacted]'
+
+/**
+ * Breadcrumb `data` keys that hold a URL. Sentry's fetch/xhr breadcrumbs use
+ * `url`; navigation breadcrumbs use `from`/`to`. Any of these can carry an
+ * invite token (`?token=…`) or a Supabase auth token (`#access_token=…`).
+ */
+const URL_BREADCRUMB_KEYS = ['url', 'to', 'from'] as const
+
+/**
+ * Drops the query string and hash fragment from a URL, keeping only the path.
+ *
+ * We redact the WHOLE query/hash rather than individual params: the app never
+ * needs query strings in an error report, and the sensitive values here —
+ * invite tokens (`/rest/v1/family_invites?token=eq.<uuid>`, `/join?token=…`)
+ * and Supabase magic-link/`detectSessionInUrl` tokens (`#access_token=…`,
+ * `#refresh_token=…`, `?code=…`) — must never leave the browser. Works for both
+ * absolute and relative URLs by cutting at the first `?` or `#`.
+ */
+function redactUrl(url: string): string {
+  const separator = url.search(/[?#]/)
+  return separator === -1 ? url : `${url.slice(0, separator)}${REDACTED}`
+}
+
+/**
+ * Scrubs URL-bearing fields from a breadcrumb's `data` in place: redacts known
+ * URL keys and removes the split-out query/fragment fields that fetch/xhr
+ * breadcrumbs attach.
+ */
+function scrubBreadcrumbData(data: Record<string, unknown>): void {
+  for (const key of URL_BREADCRUMB_KEYS) {
+    const value = data[key]
+    if (typeof value === 'string') {
+      data[key] = redactUrl(value)
+    }
+  }
+  delete data['http.query']
+  delete data['http.fragment']
+}
+
 /**
  * Strips personally identifying information before an event leaves the browser.
  *
@@ -56,11 +97,18 @@ function isReportingEnabled(): boolean {
  * What we DROP (conservative — when unsure, remove):
  * - `user.email`, `user.username`, `user.ip_address` — directly identifying.
  * - request cookies and any auth-bearing headers — tokens must never leave.
+ * - the query string and hash fragment of `event.request.url`, its split-out
+ *   `query_string`, and the same on every breadcrumb URL (`data.url`/`to`/`from`
+ *   plus `http.query`/`http.fragment`) — Sentry's default integrations attach
+ *   these, and the join flow and magic-link sign-in carry invite/auth tokens in
+ *   exactly those places. Without this they would ride into Sentry unredacted.
  * - Baby/child names and event metadata are never intentionally attached to
  *   Sentry scope anywhere in the app; this hook is the backstop that keeps it
  *   that way if a future breadcrumb/context accidentally carries them.
+ *
+ * Exported for unit testing; not part of the module's public API.
  */
-function scrubEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
+export function scrubEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
   if (event.user) {
     const { id } = event.user
     event.user = id ? { id } : {}
@@ -68,12 +116,24 @@ function scrubEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
 
   if (event.request) {
     delete event.request.cookies
+    delete event.request.query_string
+    if (typeof event.request.url === 'string') {
+      event.request.url = redactUrl(event.request.url)
+    }
     if (event.request.headers) {
       for (const header of Object.keys(event.request.headers)) {
         const name = header.toLowerCase()
         if (name === 'authorization' || name === 'cookie' || name === 'apikey') {
           delete event.request.headers[header]
         }
+      }
+    }
+  }
+
+  if (event.breadcrumbs) {
+    for (const breadcrumb of event.breadcrumbs) {
+      if (breadcrumb.data) {
+        scrubBreadcrumbData(breadcrumb.data)
       }
     }
   }

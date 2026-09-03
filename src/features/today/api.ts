@@ -16,6 +16,19 @@ export type ImmediateEventType = Extract<EventType, 'diaper' | 'mood'>
  */
 export type TimerEventType = Extract<EventType, 'sleep' | 'feeding'>
 
+/** The event types logged as a start/stop timer, as a runtime set. */
+const TIMER_EVENT_TYPES: ReadonlySet<EventType> = new Set<EventType>(['sleep', 'feeding'])
+
+/**
+ * True while `event` is a timer event (sleep/feeding) that is still running —
+ * i.e. it has no `end_time` yet. This is the single source of truth for "there
+ * is a live timer", shared by the clock, the quick-log bar, and the once-a-second
+ * tick that keeps their live elapsed readouts advancing.
+ */
+export function isRunningTimerEvent(event: Event): boolean {
+  return event.end_time === null && TIMER_EVENT_TYPES.has(event.type)
+}
+
 /** Resolves the signed-in user's id, or throws if there is no session. */
 async function requireUserId(): Promise<string> {
   const { data: userResult, error: userError } = await supabase.auth.getUser()

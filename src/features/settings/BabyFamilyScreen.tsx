@@ -10,6 +10,7 @@ import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
 import type { Child, FamilyMemberRole } from '../../types/database'
 import { useAuth } from '../auth/useAuth'
 import { useOnboardingStatus } from '../onboarding/useOnboardingStatus'
+import { deviceDateString } from '../today/todayDate'
 import { INVITE_VALIDITY_DAYS } from './api'
 import { SettingsHeader } from './SettingsHeader'
 import {
@@ -34,14 +35,12 @@ import {
 
 // --- child name + birth date ---------------------------------------------
 
-const todayIsoDate = new Date().toISOString().slice(0, 10)
-
 const babyDetailsSchema = z.object({
   name: z.string().trim().min(1, 'צריך להזין שם'),
   birthDate: z
     .string()
     .min(1, 'צריך להזין תאריך לידה')
-    .refine((value) => value <= todayIsoDate, 'תאריך הלידה לא יכול להיות בעתיד'),
+    .refine((value) => value <= deviceDateString(), 'תאריך הלידה לא יכול להיות בעתיד'),
 })
 
 interface BabyDetailsFieldErrors {

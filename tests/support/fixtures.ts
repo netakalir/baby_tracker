@@ -168,10 +168,21 @@ export const test = base.extend<{ factory: TestFactory }>({
       },
 
       async addMember(user, familyId) {
+        // Membership can no longer be self-inserted directly (the open INSERT
+        // policy was removed); it is created only via the join RPC against a
+        // real invite. Seed an invite with the service role, then join as the
+        // user through the same `join_family_by_token` path the app uses.
+        const token = `e2e-join-${uniqueSuffix()}`
+        const { error: inviteError } = await adminClient.from('family_invites').insert({
+          family_id: familyId,
+          invited_by: user.id,
+          token,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        })
+        if (inviteError) throw inviteError
+
         const client = await clientFor(user)
-        const { error } = await client
-          .from('family_members')
-          .insert({ family_id: familyId, user_id: user.id, role: 'parent' })
+        const { error } = await client.rpc('join_family_by_token', { p_token: token })
         if (error) throw error
       },
     }

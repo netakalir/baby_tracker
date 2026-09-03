@@ -19,12 +19,33 @@ const REPORTING_ENVIRONMENTS = ['production', 'integration']
 
 let initialized = false
 
+/** Marker left in place of a redacted query string or hash fragment. */
+const REDACTED = '[redacted]'
+
+/** Breadcrumb `data` keys that hold a URL (fetch/xhr `url`, navigation `from`/`to`). */
+const URL_BREADCRUMB_KEYS = ['url', 'to', 'from']
+
+/**
+ * Drops the query string and hash fragment from a URL, keeping only the path.
+ * The whole query/hash is redacted (never individual params): tokens such as
+ * `?token=…`, `#access_token=…` or `?code=…` must never leave the runtime, and
+ * error reports never need query strings. Handles absolute and relative URLs.
+ */
+function redactUrl(url: string): string {
+  const separator = url.search(/[?#]/)
+  return separator === -1 ? url : `${url.slice(0, separator)}${REDACTED}`
+}
+
 /**
  * Strips personally identifying information before an event is sent.
  * Keeps only a non-identifying `user.id` (a UUID) when present; drops emails,
- * usernames, IPs, request cookies and any auth-bearing headers. The estimates
- * API receives a `child_id` and the caller's JWT — neither is attached to Sentry
- * scope anywhere, and this hook is the backstop that keeps it that way.
+ * usernames, IPs, request cookies and any auth-bearing headers. Also redacts the
+ * query string and hash fragment from `request.url`, its split-out
+ * `query_string`, and every breadcrumb URL (`data.url`/`to`/`from` plus
+ * `http.query`/`http.fragment`) — Sentry's default integrations attach these and
+ * they can carry invite/auth tokens. The delete-user function receives the
+ * caller's JWT — not attached to Sentry scope anywhere, and this hook is the
+ * backstop that keeps it that way.
  */
 // deno-lint-ignore no-explicit-any
 function scrubEvent(event: any): any {
@@ -33,6 +54,10 @@ function scrubEvent(event: any): any {
   }
   if (event.request) {
     delete event.request.cookies
+    delete event.request.query_string
+    if (typeof event.request.url === 'string') {
+      event.request.url = redactUrl(event.request.url)
+    }
     if (event.request.headers) {
       for (const header of Object.keys(event.request.headers)) {
         const name = header.toLowerCase()
@@ -40,6 +65,19 @@ function scrubEvent(event: any): any {
           delete event.request.headers[header]
         }
       }
+    }
+  }
+  if (Array.isArray(event.breadcrumbs)) {
+    for (const breadcrumb of event.breadcrumbs) {
+      const data = breadcrumb?.data
+      if (!data) continue
+      for (const key of URL_BREADCRUMB_KEYS) {
+        if (typeof data[key] === 'string') {
+          data[key] = redactUrl(data[key])
+        }
+      }
+      delete data['http.query']
+      delete data['http.fragment']
     }
   }
   return event

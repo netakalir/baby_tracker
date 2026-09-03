@@ -1,6 +1,7 @@
 import { useId, useMemo, useState, type KeyboardEvent } from 'react'
-import type { Event, EventType } from '../../types/database'
+import type { Event } from '../../types/database'
 import type { Unit } from '../../lib/units'
+import { isRunningTimerEvent } from './api'
 import { clipEventToDay, type DaySegment } from './clock/dayWindow'
 import { eventColor } from './clock/eventColors'
 import { minutesToAngle, pointOnCircle, strokeArcPath, type Point } from './clock/geometry'
@@ -32,6 +33,13 @@ interface DayClockProps {
   emptyStateText?: string
   /** The viewer's feeding-amount unit ('ml' | 'oz'), for the feeding detail label. */
   displayUnit?: Unit
+  /**
+   * Current wall-clock time as epoch ms, used as the "end" of an in-progress
+   * timer's arc and its centre/aria readout. The parent ticks this once a second
+   * while a timer runs so the ongoing arc grows live; it is irrelevant in
+   * `readOnly` mode (a past day has no live timer) and defaults to "now".
+   */
+  now?: number
 }
 
 // --- Dimensions (viewBox units; the SVG scales responsively via CSS). ---
@@ -57,14 +65,6 @@ const HALO_RADII = [132, 144, 143 + 15] as const
 const POINT_DOT_RADIUS = 5.5
 
 const EMPTY_STATE_TEXT = 'עדיין אין נתונים היום - לחץ על אחד הכפתורים כדי להתחיל'
-
-/**
- * Event types logged as a start/stop timer. While such an event is still running
- * (`end_time === null`) its arc is drawn up to "now" instead of collapsing to a
- * dot, so an in-progress sleep is visible on the dial. Every other type is a
- * single instantaneous tap and is genuinely a point in time.
- */
-const TIMER_TYPES: ReadonlySet<EventType> = new Set<EventType>(['sleep', 'feeding'])
 
 interface Drawable {
   readonly event: Event
@@ -93,10 +93,14 @@ function eventLabel(event: Event, displayUnit: Unit): string {
 }
 
 /** Structured, human-readable summary of an event: its type and time details. */
-function describeEvent({ event, segment, isOngoing }: Drawable, displayUnit: Unit): EventDescription {
+function describeEvent(
+  { event, segment, isOngoing }: Drawable,
+  displayUnit: Unit,
+  nowIso: string,
+): EventDescription {
   const label = eventLabel(event, displayUnit)
   if (isOngoing) {
-    const elapsed = formatDuration(event.start_time, new Date().toISOString())
+    const elapsed = formatDuration(event.start_time, nowIso)
     return { label, lines: [`מ-${formatDeviceTime(event.start_time)}`, `בתהליך · ${elapsed}`] }
   }
   if (segment.isPointInTime || event.end_time === null) {
@@ -117,10 +121,14 @@ function describeEvent({ event, segment, isOngoing }: Drawable, displayUnit: Uni
  * compact centre readout, so it reads clearly aloud (e.g. "שינה מ-22:40 עד
  * 06:10, משך 7ש׳ 30ד׳" rather than "22:40–06:10 · 7ש׳ 30ד׳").
  */
-function ariaLabelFor({ event, segment, isOngoing }: Drawable, displayUnit: Unit): string {
+function ariaLabelFor(
+  { event, segment, isOngoing }: Drawable,
+  displayUnit: Unit,
+  nowIso: string,
+): string {
   const label = eventLabel(event, displayUnit)
   if (isOngoing) {
-    const elapsed = formatDuration(event.start_time, new Date().toISOString())
+    const elapsed = formatDuration(event.start_time, nowIso)
     return `${label} מ-${formatDeviceTime(event.start_time)}, עדיין בתהליך (${elapsed})`
   }
   if (segment.isPointInTime || event.end_time === null) {
@@ -140,6 +148,7 @@ export function DayClock({
   readOnly = false,
   emptyStateText = EMPTY_STATE_TEXT,
   displayUnit = 'ml',
+  now = Date.now(),
 }: DayClockProps) {
   // useId gives stable, collision-free ids so multiple clocks can coexist on a page.
   const idPrefix = useId().replace(/[^a-zA-Z0-9_-]/g, '')
@@ -148,15 +157,20 @@ export function DayClock({
   // by this so the wall-clock times stay correct when day_start is not midnight.
   const dayStartMinutes = parseDayStartMinutes(dayStart)
 
+  // The instant an in-progress timer's arc and readout are drawn up to. The
+  // parent advances `now` once a second while a timer runs, so the ongoing arc
+  // grows live instead of freezing until the next event change.
+  const nowIso = new Date(now).toISOString()
+
   const { arcs, points } = useMemo(() => {
-    // Recomputed whenever the event list changes (including via realtime), which
-    // is also when a running timer's arc needs to grow.
-    const nowIso = new Date().toISOString()
     const arcList: Drawable[] = []
     const pointList: Drawable[] = []
 
     for (const event of events) {
-      const isOngoing = !readOnly && event.end_time === null && TIMER_TYPES.has(event.type)
+      // A still-running timer (sleep/feeding, no end_time) is drawn up to `now`
+      // instead of collapsing to a dot, so an in-progress event is visible on
+      // the dial. Never in read-only mode: a past day has no live elapsed time.
+      const isOngoing = !readOnly && isRunningTimerEvent(event)
       const segment = clipEventToDay(
         event.start_time,
         isOngoing ? nowIso : event.end_time,
@@ -170,7 +184,7 @@ export function DayClock({
     }
 
     return { arcs: arcList, points: pointList }
-  }, [events, date, dayStart, readOnly])
+  }, [events, date, dayStart, readOnly, nowIso])
 
   const isEmpty = arcs.length === 0 && points.length === 0
   const clickable = onArcClick !== undefined
@@ -190,7 +204,7 @@ export function DayClock({
     // Pointer/focus handlers surface the centre readout on every element,
     // whether or not the clock is in editable (onArcClick) mode.
     const shared = {
-      'aria-label': ariaLabelFor(drawable, displayUnit),
+      'aria-label': ariaLabelFor(drawable, displayUnit, nowIso),
       tabIndex: 0,
       className: 'cursor-pointer focus:outline-none',
       onMouseEnter: show,
@@ -397,7 +411,7 @@ export function DayClock({
               exact start/end/duration - the arcs alone only show position. */}
           {activeDrawable &&
             (() => {
-              const { label, lines } = describeEvent(activeDrawable, displayUnit)
+              const { label, lines } = describeEvent(activeDrawable, displayUnit, nowIso)
               const allLines = [label, ...lines]
               const lineHeight = 14
               const firstLineY = CENTER.y - ((allLines.length - 1) * lineHeight) / 2

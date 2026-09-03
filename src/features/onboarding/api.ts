@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase'
-import type { Child, FamilyInvite } from '../../types/database'
+import type { Child } from '../../types/database'
 import type { AddChildInput, CreateFamilyInput, JoinFamilyInput } from './schemas'
 
 const DEFAULT_FAMILY_NAME = 'המשפחה שלי'
@@ -34,45 +34,32 @@ export class JoinFamilyError extends Error {
   }
 }
 
-export async function joinFamilyByToken(userId: string, input: JoinFamilyInput): Promise<void> {
-  const { data: invite, error: inviteError } = await supabase
-    .from('family_invites')
-    .select('*')
-    .eq('token', input.token)
-    .maybeSingle<FamilyInvite>()
+/**
+ * Maps the typed errors raised by the `join_family_by_token` SECURITY DEFINER
+ * function (see the harden-invite migration) to the client error codes. The DB
+ * is the single source of truth: it re-validates and claims the invite and
+ * creates the membership atomically, so the client only translates the result.
+ */
+const JOIN_ERROR_BY_DB_MESSAGE: Record<string, JoinFamilyErrorCode> = {
+  invite_invalid: 'invalid',
+  invite_used: 'used',
+  invite_expired: 'expired',
+  already_in_family: 'already-in-family',
+}
 
-  if (inviteError) throw inviteError
-  if (!invite) throw new JoinFamilyError('invalid')
-  if (invite.used_at) throw new JoinFamilyError('used')
-  if (new Date(invite.expires_at) < new Date()) throw new JoinFamilyError('expired')
+export async function joinFamilyByToken(input: JoinFamilyInput): Promise<void> {
+  // One atomic SECURITY DEFINER call validates the invite, marks it used, and
+  // inserts the membership in a single transaction — the invite can never be
+  // burned without the membership being created (the bug the old two-step
+  // select→update→insert flow had), and membership can only be created for a
+  // real, valid invite (no client-side INSERT policy on family_members).
+  const { error } = await supabase.rpc('join_family_by_token', { p_token: input.token })
 
-  const { data: existingMembership, error: membershipLookupError } = await supabase
-    .from('family_members')
-    .select('id')
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  if (membershipLookupError) throw membershipLookupError
-  if (existingMembership) throw new JoinFamilyError('already-in-family')
-
-  // Mark the invite used first (optimistic concurrency on used_at) so two
-  // people racing on the same token can't both join.
-  const { data: claimedInvite, error: claimError } = await supabase
-    .from('family_invites')
-    .update({ used_at: new Date().toISOString(), used_by: userId })
-    .eq('id', invite.id)
-    .is('used_at', null)
-    .select()
-    .maybeSingle()
-
-  if (claimError) throw claimError
-  if (!claimedInvite) throw new JoinFamilyError('used')
-
-  const { error: membershipError } = await supabase
-    .from('family_members')
-    .insert({ family_id: invite.family_id, user_id: userId, role: 'parent' })
-
-  if (membershipError) throw membershipError
+  if (error) {
+    const code = JOIN_ERROR_BY_DB_MESSAGE[error.message]
+    if (code) throw new JoinFamilyError(code)
+    throw error
+  }
 }
 
 export async function addChild(familyId: string, input: AddChildInput): Promise<Child> {
