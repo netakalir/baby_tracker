@@ -1,5 +1,4 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { adminClient } from '../support/adminClient'
 import { expect, test, type TestUser } from '../support/fixtures'
 import { testEnv } from '../support/testEnv'
 
@@ -86,7 +85,10 @@ test.describe('invite & membership security', () => {
     const token = await factory.seedInvite(owner, family.familyId)
 
     // The invite id, obtained out of band (the attack this defends against).
-    const { data: seeded } = await adminClient
+    // Read as the owner (a member can view their family's invites); the service
+    // role has no grant on family_invites.
+    const ownerClient = await signInAs(owner)
+    const { data: seeded } = await ownerClient
       .from('family_invites')
       .select('id')
       .eq('token', token)
@@ -105,13 +107,14 @@ test.describe('invite & membership security', () => {
     expect(burned ?? []).toEqual([])
 
     // The invite is still pristine.
-    const { data: after } = await adminClient
+    const { data: after } = await ownerClient
       .from('family_invites')
       .select('used_at')
       .eq('id', seeded!.id)
       .single<{ used_at: string | null }>()
     expect(after?.used_at).toBeNull()
 
+    await ownerClient.auth.signOut()
     await client.auth.signOut()
   })
 

@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js'
-import { adminClient } from '../support/adminClient'
 import { expect, test } from '../support/fixtures'
 import { signIn } from '../support/pageActions'
 import { testEnv } from '../support/testEnv'
@@ -78,13 +77,24 @@ test.describe('family sharing', () => {
     expect(joinError?.message).toBe('invite_expired')
 
     // The invite is untouched: still unused, so a fresh (valid) link would work.
-    const { data: invite } = await adminClient
+    // Read it back as the family owner (a member can view their family's
+    // invites); the service role has no grant on family_invites.
+    const ownerClient = createClient(testEnv.supabaseUrl, testEnv.supabaseAnonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+    const { error: ownerSignInError } = await ownerClient.auth.signInWithPassword({
+      email: parentA.email,
+      password: parentA.password,
+    })
+    expect(ownerSignInError).toBeNull()
+    const { data: invite } = await ownerClient
       .from('family_invites')
       .select('used_at, used_by')
       .eq('token', expiredToken)
       .single<{ used_at: string | null; used_by: string | null }>()
     expect(invite).toEqual({ used_at: null, used_by: null })
 
+    await ownerClient.auth.signOut()
     await client.auth.signOut()
   })
 })
