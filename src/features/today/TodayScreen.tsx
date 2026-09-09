@@ -1,8 +1,10 @@
+import { memo, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Banner } from '../../components/ui/Banner'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
 import { useOnboardingStatus } from '../onboarding/useOnboardingStatus'
+import { isRunningTimerEvent } from './api'
 import { ClockLegend } from './ClockLegend'
 import { DayClock } from './DayClock'
 import { EstimateBanners } from './EstimateBanners'
@@ -10,6 +12,7 @@ import { HistoricalDayView } from './HistoricalDayView'
 import { resolveTodayMode } from './historicalDate'
 import { QuickLogButtons } from './QuickLogButtons'
 import { useDisplayUnit } from './useDisplayUnit'
+import { useNowTick } from './useNowTick'
 import { useTodayEvents } from './useTodayEvents'
 import { useTodayEventsRealtime } from './useTodayEventsRealtime'
 
@@ -33,7 +36,11 @@ interface TodayHeaderProps {
  * for now it is a static identity). A week-chart icon and a settings gear sit as
  * compact icons at the edge, pushing the Week screen and the Settings hub.
  */
-function TodayHeader({ childName, onOpenWeek, onOpenSettings }: TodayHeaderProps) {
+const TodayHeader = memo(function TodayHeader({
+  childName,
+  onOpenWeek,
+  onOpenSettings,
+}: TodayHeaderProps) {
   return (
     <header className="flex items-center justify-between gap-3">
       <div className="min-w-0">
@@ -98,7 +105,7 @@ function TodayHeader({ childName, onOpenWeek, onOpenSettings }: TodayHeaderProps
       </div>
     </header>
   )
-}
+})
 
 interface TodayContentProps {
   childId: string
@@ -122,6 +129,16 @@ function TodayContent({ childId, childName, dayStart, onOpenWeek, onOpenSettings
   // Live sync: reflect the other parent's logs/edits/deletes without a refresh.
   useTodayEventsRealtime(childId)
 
+  // A single once-a-second tick, shared by the clock and the quick-log bar and
+  // live ONLY while an open-ended timer exists. It is the one interval that
+  // grows the in-progress arc, its centre/aria readout, and the button
+  // stopwatch in lockstep; when nothing runs there is no interval and no tick.
+  const hasRunningTimer = useMemo(
+    () => (events ?? []).some(isRunningTimerEvent),
+    [events],
+  )
+  const now = useNowTick(hasRunningTimer)
+
   return (
     <>
       <TodayHeader childName={childName} onOpenWeek={onOpenWeek} onOpenSettings={onOpenSettings} />
@@ -133,7 +150,13 @@ function TodayContent({ childId, childName, dayStart, onOpenWeek, onOpenSettings
       )}
 
       <section className="mt-6 flex flex-col items-center gap-4">
-        <DayClock events={events ?? []} date={today} dayStart={dayStart} displayUnit={displayUnit} />
+        <DayClock
+          events={events ?? []}
+          date={today}
+          dayStart={dayStart}
+          displayUnit={displayUnit}
+          now={now}
+        />
         <ClockLegend />
       </section>
 
@@ -141,7 +164,7 @@ function TodayContent({ childId, childName, dayStart, onOpenWeek, onOpenSettings
         <EstimateBanners childId={childId} dayStart={dayStart} />
       </div>
 
-      <QuickLogButtons childId={childId} events={events ?? []} />
+      <QuickLogButtons childId={childId} events={events ?? []} now={now} />
     </>
   )
 }

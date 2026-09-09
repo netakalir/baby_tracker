@@ -73,6 +73,7 @@
   - `20260713000001_create_family_rpc.sql` — RPC אטומי `create_family()` (משפחה + חברות יחד) + ניקוי משפחות יתומות
   - `20260716000000_family_invites_claim_policy.sql` — **תיקון באג:** policy ל-UPDATE על `family_invites` שמאפשר להורה שני לתבוע (claim) הזמנה. בלעדיו כל ניסיון הצטרפות נכשל ב-"ההזמנה כבר נוצלה" (RLS חסם את ה-UPDATE → 0 שורות)
   - `20260716000001_family_invites_claim_expiry.sql` — **הידוק אבטחה:** הוספת `expires_at > now()` ל-policy, כדי שגם בקשת API ישירה (שעוקפת את בדיקת התוקף ב-JS) לא תוכל לתבוע הזמנה שפג תוקפה. תוקף ההזמנה נאכף כעת ברמת ה-DB, לא רק בלקוח
+  - `20260903000000_harden_invite_and_membership_flow.sql` — **הידוק אבטחה קריטי (גבול ההרשאות של כל האפליקציה):** סגירת ארבע חולשות חופפות בזרימת הזמנה→הצטרפות. (S1) הוסרה policy ה-INSERT הפתוחה על `family_members` (`with check (user_id = auth.uid())` בלבד) שאפשרה לכל משתמש מאומת להכניס חברות לכל `family_id` ולקבל גישה מלאה — חברות נוצרת כעת **רק** דרך RPC של SECURITY DEFINER. (S2) הוסרו policy ה-SELECT `using (true)` וה-`grant select ... to anon` על `family_invites` (אפשרו למי-שהוא למנות את **כל** ההזמנות/הטוקנים); אימות לפני-הרשמה עובר כעת ל-RPC חדש `get_invite_by_token` שמחזיר רק שורה אחת ושדות לא-רגישים. (S3) הוסרה policy ה-UPDATE הישירה שאפשרה לכל משתמש מאומת "לשרוף" כל הזמנה (DoS) — ה-claim מקופל כעת לתוך ה-RPC תחת נעילת שורה. (S4) `joinFamilyByToken` הפך מ-select→update→insert לא-אטומי ל-RPC אטומי יחיד `join_family_by_token` (SECURITY DEFINER, `search_path` נעול): בטרנזקציה אחת מאמת מחדש (לא-מנוצל + לא-פג), מסמן מנוצל, ומכניס חברות — הזמנה לא נשרפת יותר בלי שהחברות נוצרת. `family_invites` הוסרה מ-publication ה-realtime (אין מנוי, קריאה עוברת ל-RPC). הלקוח (`onboarding/api.ts`, `JoinFamilyScreen`) קורא ל-RPC וממפה שגיאות typed ל-`JoinFamilyErrorCode`. טסטי בידוד: `tests/e2e/invite-security.spec.ts` (S1–S4) + `family-sharing.spec.ts` עודכן. **סטטוס:** נכתב ואומת סטטית (build+lint+unit עוברים); אימות RLS בזמן-ריצה **ממתין ל-`supabase db push` בשני פרויקטי Supabase** לפני שה-E2E יכול לרוץ.
 
 **פרויקט React:**
 - React + TypeScript + Vite מוקם
@@ -142,6 +143,12 @@
 
 **עדיין פתוח (נדחה במפורש):** שכבת ה-apply — החלת ערכת נושא/שפה(i18n+RTL)/יחידות (נשמרים אך לא מיושמים) ויישום `day_start`/אזור-המכשיר על השעון (ראה "חוב שכבת ה-apply" למטה).
 
+**עדכון 2026-09-03 — תיקון ממצא U1 (קשת טיימר חיה בשעון "היום"):** קשת הטיימר שרץ, הקריאה במרכז והתווית לקורא-מסך בשעון 24 השעות לא התקדמו בזמן אמת — ה-tick-לשנייה חי רק בתוך `QuickLogButtons`, ולכן ה-`useMemo` של `DayClock` (שלכד `new Date()`) לא חושב מחדש. התיקון מרים tick משותף אחד לרכיב-האב `TodayContent` (הוק חדש `useNowTick`) שפעיל **רק** כשקיים טיימר פתוח, ומעביר `now` גם ל-`DayClock` וגם ל-`QuickLogButtons` (מקור אמת יחיד `isRunningTimerEvent` ב-`api.ts`). כדי לא לרנדר את כל העץ כל שנייה, האחים שאינם תלויי-tick (`TodayHeader`/`ClockLegend`/`EstimateBanners`) עטופים ב-`React.memo`. נוסף טסט E2E שמקבע את שעון הדפדפן (`page.clock`) ומקדם 10 דקות ומאמת שהזמן שחלף גדל בדיוק ב-10. עבר code-review עמוק ללא ממצאים.
+
+**עדכון 2026-09-03 — תיקון באג תאריך לידה (bug T1, code review):** אימות "תאריך לידה לא בעתיד" ב-`BabyFamilyScreen.tsx` וב-`onboarding/schemas.ts` השווה מול תאריך UTC שחושב **פעם אחת בטעינת המודול** (`new Date().toISOString().slice(0,10)`) — לא מתאם לעקרון אזור-המכשיר של הפרויקט, וגם לא מתעדכן אחרי חצות בסשן ארוך. סמוך אחרי חצות בישראל (UTC+2/+3) תאריך לידה תקף באותו יום מקומי נדחה בטעות כ"עתידי". תוקן: שני הקבצים משתמשים עכשיו ב-helper הקיים `deviceDateString()` (`src/features/today/todayDate.ts`), מחושב בזמן הוולידציה (בתוך ה-`refine`) ולא בטעינת המודול. נוסף טסט יחידה (`src/features/onboarding/schemas.test.ts`, vitest + `vi.useFakeTimers`/`vi.stubEnv('TZ', ...)`) שמדמה את התרחיש. build/typecheck/lint/tests עברו; code-reviewer agent הורץ על הדיף.
+
+**עדכון 2026-09-03 — תוקן: E2E תלוי-יום-בשבוע (סגירת פריט מעקב):** ב-`tests/e2e/today-historical.spec.ts` (טסט לחיצה על עמודת שבוע) הזרעת "אתמול" חושבה מ-`Date.now()` אמיתי, כך שהטסט נכשל כל אימת שהריצה קרתה ביום ראשון (אתמול = שבת = השבוע הקודם ב-לוח שבוע א'-ש', לכן השבוע הנוכחי ריק והכפתור המצופה לא קיים). זו הייתה שבריריות-טסט, לא באג אפליקציה. תוקן ע"י הקפאת שעון ה-Playwright (`page.clock.setFixedTime`) לרגע קבוע (יום רביעי) לפני ה-sign-in, וחישוב כל התאריכים ב-Node מאותו רגע קבוע במקום `Date.now()`. אותה שבריריות הפוטנציאלית (זניחה, רק בחלון 00:00–03:00 בימי ראשון) טופלה גם ב-`tests/e2e/week.spec.ts` לעקביות. פריט המעקב "Week column-click test failing" נסגר.
+
 ---
 
 ## מה עדיין נשאר לבנות
@@ -180,6 +187,18 @@
 > **חוב "שכבת ה-apply" (מ-scoping, לא חוסם):** הערכים נשמרים אך עדיין לא מיושמים ב-UI — (א) החלת ערכת נושא (dark/light), (ב) i18n/RTL חי לפי `language`, (ג) המרת יחידות לפי `units`, (ד) יישום `day_start` על השעון/הסיכומים (במקום חצות מקומית), (ה) מעבר משעון קשיח `Asia/Jerusalem` לאזור-המכשיר. הטסט `auth.spec.ts` עודכן להגיע להתנתקות דרך ה-Settings hub (הכפתור עבר לשם בגל 2).
 
 **נדחה לאפיון נפרד:** מדיניות תוקף טוקן (בדיקת תוקף במקום אימות בכל כניסה) — `screen-settings-spec.md §8`; ניקוי משפחות יתומות (מחיקת חבר אחרון).
+
+### Phase 0 — Beta hardening
+
+**Sentry error monitoring (issue #20) — ✅ קוד מוכן, טרם הופעל בפרודקשן.**
+נוסף ניטור שגיאות ל-Frontend (React) ול-Edge Functions (`estimates`, `delete-user`). **שגיאות בלבד** — ללא Session Replay וללא performance tracing (`tracesSampleRate: 0`), דרישת בטיחות PII (שמות תינוקות ב-UI). כל השליחה מגודרת: פועלת רק כאשר יש DSN **וגם** ה-environment הוא `production`/`integration`, כך ש-dev/test לעולם לא שולחים. `beforeSend` מנקה PII (email/username/ip, cookies, כותרות auth) בשני הצדדים; `sendDefaultPii: false`. נוסף `Sentry.ErrorBoundary` סביב עץ האפליקציה עם fallback על-פי מערכת העיצוב (במקום מסך לבן), ולכידת שגיאות Supabase/רשת דרך `QueryCache`/`MutationCache` ב-`queryClient` (מסננת מצבי auth צפויים). מפות מקור מועלות ל-Sentry ב-build רק כאשר `SENTRY_AUTH_TOKEN` קיים (אחרת ה-build רץ ללא שינוי).
+>
+> **הקשחת PII ב-URL/breadcrumbs (P1) — ✅ תוקן.** `scrubEvent` (Frontend + שני ה-Edge) ניקה קודם רק user/cookies/headers אך **לא** את `event.request.url` ולא את ה-breadcrumbs, בעוד ה-integrations המובנים של Sentry מצרפים אותם. זרימת ההצטרפות (`/join?token=…`, `/rest/v1/family_invites?token=eq.…`) ו-magic-link (`#access_token=…`) היו יכולים לדלוף טוקן פנימה — בניגוד להבטחה המפורשת של המודול ("tokens must never leave"). התיקון: מחיקת query string ו-hash מ-`request.url`, מ-`request.query_string`, ומכל URL ב-breadcrumb (`data.url`/`to`/`from` + `http.query`/`http.fragment`) — מוחקים את כל ה-query/hash שמרנית (האפליקציה לא צריכה אותם בדיווח). נוספו unit tests ל-`scrubEvent` (`src/lib/monitoring.test.ts`) המוודאים שטוקנים/מיילים/query strings מוסרים מ-user, headers, `request.url` ו-breadcrumb URLs; `vitest.config.ts` מזריק כעת את ה-defines של ה-build (`__APP_VERSION__`) כדי שהמודול ייטען בבדיקות.
+
+> **חוב הפעלה (Netanel צריך להגדיר משתני סביבה — אין ערכים אמיתיים בריפו):**
+> - **Vercel (Frontend):** `VITE_SENTRY_DSN`, `VITE_SENTRY_ENVIRONMENT` (הגדר `production` בפרוד ו-`integration` באינטג'), ובנוסף לבנייה בלבד: `SENTRY_AUTH_TOKEN` (secret), `SENTRY_ORG`, `SENTRY_PROJECT` — להעלאת source maps.
+> - **Supabase (Edge Function secrets, דרך `supabase secrets set`):** `SENTRY_DSN`, `SENTRY_ENVIRONMENT`.
+> - שמות המשתנים מתועדים ב-`.env.example`. ה-Edge Functions לא נפרסו במסגרת משימה זו (`supabase functions deploy` יבוצע בנפרד).
 
 ### לא ב-MVP (שלבים עתידיים)
 - **Phase 2:** עקומות גדילה WHO + אבני דרך התפתחותיות

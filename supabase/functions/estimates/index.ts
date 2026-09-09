@@ -18,6 +18,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { corsHeaders, jsonResponse } from './cors.ts'
+import { withSentry } from './sentry.ts'
 import { ageInMonths, normForAge } from './ageNorms.ts'
 import { computeFeedingEstimate, computeSleepEstimate } from './estimate.ts'
 import type { EstimateEvent, EstimateResponse } from './types.ts'
@@ -39,7 +40,7 @@ interface EventRow {
   end_time: string | null
 }
 
-Deno.serve(async (request: Request): Promise<Response> => {
+const handleRequest = async (request: Request): Promise<Response> => {
   if (request.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -124,4 +125,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   return jsonResponse(response, 200)
-})
+}
+
+// Wrapped so any uncaught error is reported to Sentry (no-op unless configured);
+// the response/CORS contract is unchanged.
+Deno.serve(withSentry(handleRequest))
