@@ -1,5 +1,6 @@
-import type { BreastSide, FeedingMetadata } from '../../types/database'
+import type { BreastSide, Event, FeedingMetadata } from '../../types/database'
 import { formatForDisplay, stepFor, type FeedingAmount, type Unit } from '../../lib/units'
+import { getBreastSide, getFeedingType } from './eventMetadata'
 
 /**
  * The quick-pick options shown when starting a feeding: two breast sides and a
@@ -105,18 +106,18 @@ export function breastSideLabel(side: BreastSide): string {
  * enrich the feeding event's label without turning it into a separate type.
  */
 export function feedingDetailLabel(
-  metadata: Record<string, unknown> | null,
+  metadata: Event['metadata'],
   displayUnit: Unit,
 ): string | null {
   if (!metadata) return null
-  const feedingType = metadata.feeding_type
+  const feedingType = getFeedingType({ metadata })
   if (feedingType === 'bottle') {
     const amount = readFeedingAmount(metadata)
     return amount ? `בקבוק · ${formatFeedingAmount(amount, displayUnit)}` : 'בקבוק'
   }
   if (feedingType === 'breast') {
-    const side = metadata.side
-    return side === 'left' || side === 'right' ? `הנקה · ${SIDE_LABELS[side]}` : 'הנקה'
+    const side = getBreastSide({ metadata })
+    return side ? `הנקה · ${SIDE_LABELS[side]}` : 'הנקה'
   }
   return null
 }

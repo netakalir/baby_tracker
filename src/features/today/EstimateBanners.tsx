@@ -34,8 +34,15 @@ const BASIS_TEXT: Record<'personal' | 'age_norm', string> = {
 const UNAVAILABLE_TEXT = 'עוד אין מספיק נתונים'
 const LOADING_TEXT = 'מחשב…'
 
+/** The zone the viewing device is set to, resolved client-side (see todayDate.ts). */
+const DEVICE_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
+
 /** Wall-clock time in the device timezone (contract §3), e.g. "בסביבות 15:30". */
-const timeFormatter = new Intl.DateTimeFormat('he-IL', { hour: '2-digit', minute: '2-digit' })
+const timeFormatter = new Intl.DateTimeFormat('he-IL', {
+  timeZone: DEVICE_TIME_ZONE,
+  hour: '2-digit',
+  minute: '2-digit',
+})
 
 interface EstimateLines {
   primary: string

@@ -6,9 +6,12 @@ import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query'
  * genuine failures (network/5xx, RLS denials, unexpected Supabase errors) but
  * NOT expected, benign states that surface as errors — chiefly a missing/expired
  * auth session, which the app handles by redirecting to sign-in. Reporting those
- * would drown real issues in noise.
+ * would drown real issues in noise. Also used to decide whether a benign
+ * auth error is worth retrying (it isn't).
+ *
+ * Exported for unit testing; not part of the module's public API.
  */
-function isReportableError(error: unknown): boolean {
+export function isReportableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
 
   // Supabase auth surfaces normal "not signed in" / stale-session conditions as
@@ -43,7 +46,10 @@ export const queryClient = new QueryClient({
   }),
   defaultOptions: {
     queries: {
-      retry: 1,
+      // Retry once, but never for a missing/expired auth session — that state
+      // won't resolve itself on retry, and the app already redirects to
+      // sign-in for it. Reuses the same benign-error check as Sentry reporting.
+      retry: (failureCount, error) => failureCount < 1 && isReportableError(error),
       staleTime: 30_000,
     },
   },

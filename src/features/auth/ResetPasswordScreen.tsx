@@ -60,7 +60,7 @@ export function ResetPasswordScreen() {
               hasError={Boolean(fieldErrors.password)}
               onChange={(event) => setPassword(event.target.value)}
             />
-            <FormError message={fieldErrors.password} />
+            <FormError id="password-error" message={fieldErrors.password} />
           </div>
 
           <div>
@@ -73,7 +73,7 @@ export function ResetPasswordScreen() {
               hasError={Boolean(fieldErrors.confirmPassword)}
               onChange={(event) => setConfirmPassword(event.target.value)}
             />
-            <FormError message={fieldErrors.confirmPassword} />
+            <FormError id="confirmPassword-error" message={fieldErrors.confirmPassword} />
           </div>
 
           {mutation.isError && (

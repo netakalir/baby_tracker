@@ -121,7 +121,7 @@ export function AuthPage() {
               hasError={Boolean(fieldErrors.email)}
               onChange={(event) => setEmail(event.target.value)}
             />
-            <FormError message={fieldErrors.email} />
+            <FormError id="email-error" message={fieldErrors.email} />
           </div>
 
           <div>
@@ -134,7 +134,7 @@ export function AuthPage() {
               hasError={Boolean(fieldErrors.password)}
               onChange={(event) => setPassword(event.target.value)}
             />
-            <FormError message={fieldErrors.password} />
+            <FormError id="password-error" message={fieldErrors.password} />
           </div>
 
           {mode === 'signIn' && (
