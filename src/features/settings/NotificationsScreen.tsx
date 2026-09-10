@@ -4,6 +4,7 @@ import { Banner } from '../../components/ui/Banner'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
 import { ErrorScreen } from '../../components/ui/ErrorScreen'
 import { useAuth } from '../auth/useAuth'
+import { withPreferenceDefaults } from './preferencesDefaults'
 import { SettingsHeader } from './SettingsHeader'
 import { useUpsertUserPreferences, useUserPreferences } from './useUserPreferences'
 
@@ -48,13 +49,7 @@ const notificationToggles: readonly NotificationToggle[] = [
 function toUpsertRow(userId: string, stored: UserPreferences | null): UserPreferencesUpsert {
   return {
     user_id: userId,
-    display_name: stored?.display_name ?? null,
-    language: stored?.language ?? 'he',
-    theme: stored?.theme ?? 'system',
-    units: stored?.units ?? 'ml',
-    notif_feeding: stored?.notif_feeding ?? false,
-    notif_sleep: stored?.notif_sleep ?? false,
-    notif_daily_summary: stored?.notif_daily_summary ?? false,
+    ...withPreferenceDefaults(stored),
   }
 }
 

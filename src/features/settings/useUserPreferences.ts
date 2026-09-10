@@ -26,15 +26,40 @@ export function useUserPreferences(userId: string | undefined) {
 }
 
 /**
- * Upserts the full preferences row and writes the returned row straight into the
- * cache, so a change made on one settings sub-screen is reflected on the others
- * without a refetch.
+ * Upserts the full preferences row. Applies the change to the cache
+ * optimistically (before the round-trip resolves) so toggles/selectors reflect
+ * the new state immediately, then reconciles with the server response on
+ * success or rolls back to the previous cached row on failure - the standard
+ * TanStack Query optimistic-update pattern (cancel in-flight reads, snapshot,
+ * write, rollback on error).
  */
 export function useUpsertUserPreferences() {
   const queryClient = useQueryClient()
 
-  return useMutation<UserPreferences, unknown, UserPreferencesUpsert>({
+  return useMutation<
+    UserPreferences,
+    unknown,
+    UserPreferencesUpsert,
+    { previous: UserPreferences | null | undefined }
+  >({
     mutationFn: upsertUserPreferences,
+    onMutate: async (patch) => {
+      const key = userPreferencesKey(patch.user_id)
+      await queryClient.cancelQueries({ queryKey: key })
+
+      const previous = queryClient.getQueryData<UserPreferences | null>(key)
+      const optimistic: UserPreferences = {
+        ...patch,
+        updated_at: previous?.updated_at ?? new Date().toISOString(),
+      }
+      queryClient.setQueryData(key, optimistic)
+
+      return { previous }
+    },
+    onError: (_error, patch, context) => {
+      if (!context) return
+      queryClient.setQueryData(userPreferencesKey(patch.user_id), context.previous)
+    },
     onSuccess: (updated) => {
       queryClient.setQueryData(userPreferencesKey(updated.user_id), updated)
     },
