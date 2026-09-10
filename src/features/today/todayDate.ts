@@ -13,10 +13,13 @@
  * The device zone is resolved via Intl and all math is derived through the
  * Intl APIs, so both the wall clock and the boundary stay correct across DST
  * transitions.
+ *
+ * The zone is resolved lazily (per call) rather than once at module load, so
+ * a device timezone change (e.g. travel, or a manual OS change) mid-session
+ * is picked up without a full page reload. The `Intl.DateTimeFormat`
+ * instances for a given zone are memoized in a small keyed cache, so
+ * formatters are only rebuilt when the resolved zone actually changes.
  */
-
-/** The zone the viewing device is set to, resolved client-side. */
-const DEVICE_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 /** The UTC ISO bounds of a single child-day (device tz + per-child `day_start`). */
 export interface DayBounds {
@@ -26,30 +29,55 @@ export interface DayBounds {
   endIso: string
 }
 
-const isoDateFormatter = new Intl.DateTimeFormat('en-CA', {
-  timeZone: DEVICE_TIME_ZONE,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-})
+/** The zone the viewing device is currently set to, resolved fresh on each call. */
+function resolveDeviceTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone
+}
 
-const offsetPartsFormatter = new Intl.DateTimeFormat('en-US', {
-  timeZone: DEVICE_TIME_ZONE,
-  hour12: false,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-})
+interface ZoneFormatters {
+  isoDate: Intl.DateTimeFormat
+  offsetParts: Intl.DateTimeFormat
+}
+
+const formattersByZone = new Map<string, ZoneFormatters>()
+
+/**
+ * The formatter pair for the *current* device zone, memoized per zone so a
+ * stable zone reuses its formatters while a changed zone gets fresh ones.
+ */
+function currentZoneFormatters(): ZoneFormatters {
+  const zone = resolveDeviceTimeZone()
+  const cached = formattersByZone.get(zone)
+  if (cached) return cached
+
+  const formatters: ZoneFormatters = {
+    isoDate: new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }),
+    offsetParts: new Intl.DateTimeFormat('en-US', {
+      timeZone: zone,
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }),
+  }
+  formattersByZone.set(zone, formatters)
+  return formatters
+}
 
 /**
  * The device-local calendar date (`YYYY-MM-DD`) for a given instant.
  * en-CA renders dates as `YYYY-MM-DD`, which is exactly the shape we want.
  */
 export function deviceDateString(now: Date = new Date()): string {
-  return isoDateFormatter.format(now)
+  return currentZoneFormatters().isoDate.format(now)
 }
 
 /**
@@ -66,7 +94,7 @@ export function parseDayStartMinutes(dayStart: string): number {
 
 /** The offset (in minutes) of the device zone from UTC at a given instant. */
 function deviceUtcOffsetMinutes(instant: Date): number {
-  const parts = offsetPartsFormatter.formatToParts(instant)
+  const parts = currentZoneFormatters().offsetParts.formatToParts(instant)
   const lookup = (type: Intl.DateTimeFormatPartTypes): number => {
     const part = parts.find((candidate) => candidate.type === type)
     if (!part) {
