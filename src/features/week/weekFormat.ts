@@ -41,9 +41,13 @@ export function formatHoursShort(minutes: number): string {
 
 /**
  * The weekly sleep average as a Hebrew "hours per day" string for the summary
- * line — e.g. "12.5 ש׳ ליום". Returns a dash when there is no tracked day.
+ * line — e.g. "12.5 ש׳ ליום (מתוך 5 ימים)". The average is per day that
+ * actually has sleep logged, and `sleepDaysCount` (N) is surfaced alongside it
+ * so the number isn't read as "every day of the week" (CR finding A1).
+ * Returns a dash when no day has sleep logged.
  */
-export function formatAverageSleep(avgMinutes: number, hasData: boolean): string {
-  if (!hasData) return '—'
-  return `${(avgMinutes / 60).toFixed(1)} ש׳ ליום`
+export function formatAverageSleep(avgMinutes: number, sleepDaysCount: number): string {
+  if (sleepDaysCount <= 0) return '—'
+  const days = sleepDaysCount === 1 ? 'יום' : 'ימים'
+  return `${(avgMinutes / 60).toFixed(1)} ש׳ ליום (מתוך ${sleepDaysCount} ${days})`
 }

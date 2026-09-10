@@ -14,6 +14,12 @@ interface WeekBarChartProps {
   getLabel: (summary: DaySummary) => string
   /** Accessible description of a day's value (e.g. "12 שעות שינה"). */
   getValueText: (summary: DaySummary) => string
+  /**
+   * Whether THIS channel has data for the day — not the same as
+   * `summary.hasData` (any event at all), since a day can have e.g. only
+   * feeding logged and no sleep. Drives the gray "no data" track per chart.
+   */
+  getHasData: (summary: DaySummary) => boolean
   /** The tallest value across the week, used to scale every bar. */
   max: number
   /**
@@ -32,8 +38,10 @@ function barGradient(channel: 'sleep' | 'feeding'): string {
 /**
  * One primary weekly bar chart: seven day columns (Sunday first; RTL-natural,
  * so Sunday sits at the start edge), each a tappable target that opens that
- * day's Today view. A day with no data at all shows a faint gray track instead
- * of a zero-height bar, so it never implies "zero" (spec §6). Hand-built with
+ * day's Today view. A day with no data *for this channel* shows a faint gray
+ * track instead of a zero-height bar, so it never implies "zero" (spec §6) —
+ * e.g. a day with feeding logged but no sleep still shows "no data" on the
+ * sleep chart, not a 0-hour bar. Hand-built with
  * CSS rather than a chart library, reusing the app's event-type colors so the
  * channel reads identically to the clock. A single brief grow-in on mount is
  * the only animation.
@@ -44,6 +52,7 @@ export function WeekBarChart({
   getValue,
   getLabel,
   getValueText,
+  getHasData,
   max,
   onDaySelect,
 }: WeekBarChartProps) {
@@ -61,7 +70,8 @@ export function WeekBarChart({
       {days.map((summary) => {
         const { day } = summary
         const value = getValue(summary)
-        const heightPct = grown && summary.hasData ? (value / scale) * 100 : 0
+        const hasData = getHasData(summary)
+        const heightPct = grown && hasData ? (value / scale) * 100 : 0
         const label = getLabel(summary)
 
         const weekdayLabel = (
@@ -79,7 +89,7 @@ export function WeekBarChart({
             <span className="h-4 text-xs tabular-nums text-neutral-600">{label}</span>
 
             <div className="flex h-40 w-full flex-col justify-end">
-              {summary.hasData ? (
+              {hasData ? (
                 <div
                   className="w-full max-w-8 self-center rounded-md transition-[height] duration-base ease-out"
                   style={{ height: `${heightPct}%`, backgroundImage: barGradient(channel) }}
