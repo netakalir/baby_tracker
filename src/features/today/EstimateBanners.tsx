@@ -34,15 +34,27 @@ const BASIS_TEXT: Record<'personal' | 'age_norm', string> = {
 const UNAVAILABLE_TEXT = 'עוד אין מספיק נתונים'
 const LOADING_TEXT = 'מחשב…'
 
-/** The zone the viewing device is set to, resolved client-side (see todayDate.ts). */
-const DEVICE_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
+/**
+ * Wall-clock time in the device timezone (contract §3), e.g. "בסביבות 15:30".
+ * The zone is resolved lazily per call (memoized by zone) rather than captured
+ * at module load, so a device timezone change mid-session is reflected without
+ * a reload — the same reasoning as `todayDate.ts`.
+ */
+const timeFormattersByZone = new Map<string, Intl.DateTimeFormat>()
 
-/** Wall-clock time in the device timezone (contract §3), e.g. "בסביבות 15:30". */
-const timeFormatter = new Intl.DateTimeFormat('he-IL', {
-  timeZone: DEVICE_TIME_ZONE,
-  hour: '2-digit',
-  minute: '2-digit',
-})
+function formatDeviceTime(date: Date): string {
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  let formatter = timeFormattersByZone.get(zone)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('he-IL', {
+      timeZone: zone,
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    timeFormattersByZone.set(zone, formatter)
+  }
+  return formatter.format(date)
+}
 
 interface EstimateLines {
   primary: string
@@ -60,7 +72,7 @@ function describeEstimate(
     return { primary: UNAVAILABLE_TEXT }
   }
   return {
-    primary: `בסביבות ${timeFormatter.format(new Date(estimate.predicted_at))}`,
+    primary: `בסביבות ${formatDeviceTime(new Date(estimate.predicted_at))}`,
     secondary: BASIS_TEXT[estimate.basis],
   }
 }
