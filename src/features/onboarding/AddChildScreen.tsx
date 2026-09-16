@@ -66,7 +66,7 @@ export function AddChildScreen() {
               hasError={Boolean(fieldErrors.name)}
               onChange={(event) => setName(event.target.value)}
             />
-            <FormError message={fieldErrors.name} />
+            <FormError id="childName-error" message={fieldErrors.name} />
           </div>
 
           <div>
@@ -78,7 +78,7 @@ export function AddChildScreen() {
               hasError={Boolean(fieldErrors.birthDate)}
               onChange={(event) => setBirthDate(event.target.value)}
             />
-            <FormError message={fieldErrors.birthDate} />
+            <FormError id="birthDate-error" message={fieldErrors.birthDate} />
           </div>
 
           {mutation.isError && <Banner variant="error" message="לא הצלחנו להוסיף את הילד. נסה שוב." />}

@@ -26,8 +26,9 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`w-full rounded-md px-4 py-3 text-sm font-medium transition-colors duration-fast disabled:cursor-not-allowed ${variantClasses[variant]} ${className}`}
+      className={`w-full rounded-md px-4 py-3 text-sm font-medium transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed ${variantClasses[variant]} ${className}`}
       disabled={disabled || isLoading}
+      aria-busy={isLoading || undefined}
       {...rest}
     >
       {isLoading ? 'רגע...' : children}

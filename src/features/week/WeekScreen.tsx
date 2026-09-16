@@ -98,9 +98,13 @@ function WeekContent({ childId, createdAtIso, dayStart, sunday, onWeekChange }: 
   const { data: events, isLoading, isError, error } = useWeekEvents(childId, sunday, dayStart)
 
   const summary = useMemo(() => {
-    const days = weekDaysForSunday(sunday, dayStart)
+    // A single `now` snapshot, reused for both the day flags (isToday/isFuture)
+    // and the active-timer elapsed calc, so they can never drift against each
+    // other from two separate `new Date()` calls landing on different instants.
+    const now = new Date()
+    const days = weekDaysForSunday(sunday, dayStart, now)
     const { endIso } = weekBounds(sunday, dayStart)
-    return aggregateWeek(events ?? [], days, endIso, dayStart)
+    return aggregateWeek(events ?? [], days, endIso, dayStart, now)
   }, [events, sunday, dayStart])
 
   // Opening a day column: today opens the live Today view (no param), a past day
@@ -146,8 +150,9 @@ function WeekContent({ childId, createdAtIso, dayStart, sunday, onWeekChange }: 
               getValue={(day) => day.sleepMinutes}
               getLabel={(day) => formatHoursShort(day.sleepMinutes)}
               getValueText={(day) =>
-                day.hasData ? `${formatHoursShort(day.sleepMinutes) || '0'} שעות שינה` : 'אין נתונים'
+                day.hasSleepData ? `${formatHoursShort(day.sleepMinutes) || '0'} שעות שינה` : 'אין נתונים'
               }
+              getHasData={(day) => day.hasSleepData}
               onDaySelect={handleDaySelect}
             />
           </ChartCard>
@@ -159,13 +164,14 @@ function WeekContent({ childId, createdAtIso, dayStart, sunday, onWeekChange }: 
               max={summary.maxFeedingCount}
               getValue={(day) => day.feedingCount}
               getLabel={(day) => (day.feedingCount > 0 ? String(day.feedingCount) : '')}
-              getValueText={(day) => (day.hasData ? `${day.feedingCount} האכלות` : 'אין נתונים')}
+              getValueText={(day) => (day.hasFeedingData ? `${day.feedingCount} האכלות` : 'אין נתונים')}
+              getHasData={(day) => day.hasFeedingData}
               onDaySelect={handleDaySelect}
             />
           </ChartCard>
 
           <p className="text-center text-sm text-neutral-600">
-            ממוצע שינה: {formatAverageSleep(summary.avgSleepMinutes, !summary.isEmpty)} · סך האכלות:{' '}
+            ממוצע שינה: {formatAverageSleep(summary.avgSleepMinutes, summary.sleepDaysCount)} · סך האכלות:{' '}
             {summary.totalFeedings}
           </p>
         </div>

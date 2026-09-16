@@ -8,13 +8,12 @@ import type { addChildSchema as AddChildSchemaType } from './schemas'
  * UTC (e.g. Israel, UTC+2), the UTC date is still "yesterday" - a same-local-day
  * birth date must not be rejected as "in the future".
  *
- * `todayDate.ts` resolves the device timezone once at MODULE LOAD
- * (`Intl.DateTimeFormat().resolvedOptions().timeZone`, cached into formatters).
- * A statically-imported module is evaluated before this file's `beforeEach`/`it`
- * bodies run, so stubbing `TZ` after that point has no effect on it. To
- * genuinely exercise a stubbed zone we reset the module registry and
- * dynamically re-import `./schemas` (which re-imports `todayDate`) *after*
- * `vi.stubEnv('TZ', ...)`, forcing the timezone to be re-resolved.
+ * `todayDate.ts` now resolves the device timezone lazily (per call, memoized
+ * per zone) rather than once at module load, so a stubbed `TZ` is picked up
+ * without a module reload. This test still loads `./schemas` via a dynamic
+ * re-import after `vi.stubEnv('TZ', ...)` for isolation between cases (each
+ * `it` gets its own module instance), but that reset is no longer required
+ * purely to make the stubbed zone take effect.
  */
 describe('addChildSchema birthDate validation', () => {
   beforeEach(() => {

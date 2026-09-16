@@ -65,7 +65,7 @@ export function JoinFamilyScreen() {
               hasError={Boolean(fieldError)}
               onChange={(event) => setToken(event.target.value)}
             />
-            <FormError message={fieldError} />
+            <FormError id="token-error" message={fieldError} />
           </div>
 
           {mutation.isError && <Banner variant="error" message={getJoinErrorMessage(mutation.error)} />}

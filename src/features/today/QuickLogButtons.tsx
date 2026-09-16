@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Banner } from '../../components/ui/Banner'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
-import type { Event, EventType, FeedingMetadata } from '../../types/database'
+import type { Event, EventType } from '../../types/database'
 import { isRunningTimerEvent, type ImmediateEventType, type TimerEventType } from './api'
 import { eventColor } from './clock/eventColors'
+import { getFeedingType } from './eventMetadata'
 import {
   FEEDING_CHOICES,
   breastSideLabel,
@@ -353,8 +354,7 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
   }
 
   const feedingEvent = activeTimers.get('feeding')
-  const isBottleFeeding =
-    (feedingEvent?.metadata as FeedingMetadata | null)?.feeding_type === 'bottle'
+  const isBottleFeeding = feedingEvent ? getFeedingType(feedingEvent) === 'bottle' : false
 
   /**
    * Stops the running feeding. A bottle first opens the amount picker (the

@@ -117,6 +117,24 @@ describe('conversion primitives', () => {
     expect(fromCanonicalMl(118, 'oz')).toBeGreaterThan(3.9)
     expect(fromCanonicalMl(118, 'oz')).toBeLessThan(4)
   })
+
+  it('toCanonicalMl rejects negative or non-finite input', () => {
+    expect(() => toCanonicalMl(-1, 'ml')).toThrow(RangeError)
+    expect(() => toCanonicalMl(-0.01, 'oz')).toThrow(RangeError)
+    expect(() => toCanonicalMl(NaN, 'ml')).toThrow(RangeError)
+    expect(() => toCanonicalMl(Infinity, 'ml')).toThrow(RangeError)
+  })
+
+  it('toCanonicalMl accepts zero (a valid, empty feeding entry)', () => {
+    expect(toCanonicalMl(0, 'ml')).toBe(0)
+    expect(toCanonicalMl(0, 'oz')).toBe(0)
+  })
+
+  it('fromCanonicalMl rejects negative or non-finite input', () => {
+    expect(() => fromCanonicalMl(-1, 'ml')).toThrow(RangeError)
+    expect(() => fromCanonicalMl(NaN, 'oz')).toThrow(RangeError)
+    expect(() => fromCanonicalMl(-Infinity, 'oz')).toThrow(RangeError)
+  })
 })
 
 describe('grep-guard: conversion constant is centralized (spec Decision 5)', () => {

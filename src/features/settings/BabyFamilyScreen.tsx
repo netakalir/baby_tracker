@@ -161,7 +161,7 @@ function BabyFamilyContent({ familyId, child }: BabyFamilyContentProps) {
                 setSavedJustNow(false)
               }}
             />
-            <FormError message={fieldErrors.name} />
+            <FormError id="babyName-error" message={fieldErrors.name} />
           </div>
 
           <div>
@@ -176,7 +176,7 @@ function BabyFamilyContent({ familyId, child }: BabyFamilyContentProps) {
                 setSavedJustNow(false)
               }}
             />
-            <FormError message={fieldErrors.birthDate} />
+            <FormError id="babyBirthDate-error" message={fieldErrors.birthDate} />
           </div>
 
           {updateMutation.isError && (

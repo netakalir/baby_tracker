@@ -28,14 +28,30 @@ export interface FeedingAmount {
   entered: { value: number; unit: Unit }
 }
 
-/** value in `unit` -> integer canonical ml, round-half-up. */
+/**
+ * value in `unit` -> integer canonical ml, round-half-up.
+ * Rejects negative or non-finite input: a feeding amount can never be negative,
+ * and NaN/Infinity would silently corrupt the canonical `amount_ml` stored in
+ * events.metadata.
+ */
 export function toCanonicalMl(value: number, unit: Unit): number {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(`toCanonicalMl: invalid amount "${value}" (must be a finite number >= 0)`)
+  }
   const ml = unit === 'oz' ? value * ML_PER_FL_OZ : value
   return Math.round(ml)
 }
 
-/** canonical ml -> value in `unit`, FULL precision, no rounding. */
+/**
+ * canonical ml -> value in `unit`, FULL precision, no rounding.
+ * Rejects negative or non-finite `amountMl`: the canonical amount is never
+ * negative, so a bad value here means corrupted/malformed stored data rather
+ * than something safe to silently display.
+ */
 export function fromCanonicalMl(amountMl: number, unit: Unit): number {
+  if (!Number.isFinite(amountMl) || amountMl < 0) {
+    throw new RangeError(`fromCanonicalMl: invalid amount_ml "${amountMl}" (must be a finite number >= 0)`)
+  }
   return unit === 'oz' ? amountMl / ML_PER_FL_OZ : amountMl
 }
 

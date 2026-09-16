@@ -3,24 +3,11 @@ import { Banner } from '../../components/ui/Banner'
 import { ErrorScreen } from '../../components/ui/ErrorScreen'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
-import type {
-  AppLanguage,
-  AppTheme,
-  MeasurementUnit,
-  UserPreferences,
-} from '../../types/database'
+import type { AppLanguage, AppTheme, MeasurementUnit, UserPreferences } from '../../types/database'
 import { useAuth } from '../auth/useAuth'
+import { DEFAULT_LANGUAGE, DEFAULT_THEME, DEFAULT_UNITS, withPreferenceDefaults } from './preferencesDefaults'
 import { SettingsHeader } from './SettingsHeader'
 import { useUpsertUserPreferences, useUserPreferences } from './useUserPreferences'
-
-/**
- * Defaults that mirror the user_preferences DB column defaults. Used when no row
- * exists yet, so a first-time user still sees a sensible, non-empty selection
- * before their first save.
- */
-const DEFAULT_LANGUAGE: AppLanguage = 'he'
-const DEFAULT_THEME: AppTheme = 'system'
-const DEFAULT_UNITS: MeasurementUnit = 'ml'
 
 interface SelectOption<T extends string> {
   value: T
@@ -149,13 +136,10 @@ export function DisplayScreen() {
     if (!userId) return
     preferencesMutation.mutate({
       user_id: userId,
-      display_name: preferences?.display_name ?? null,
+      ...withPreferenceDefaults(preferences),
       language: patch.language ?? language,
       theme: patch.theme ?? theme,
       units: patch.units ?? units,
-      notif_feeding: preferences?.notif_feeding ?? false,
-      notif_sleep: preferences?.notif_sleep ?? false,
-      notif_daily_summary: preferences?.notif_daily_summary ?? false,
     })
   }
 
