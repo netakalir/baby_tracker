@@ -22,6 +22,16 @@ import {
   RequireVerifiedEmail,
 } from './routes/guards'
 
+/**
+ * Test-only harness that throws during render to exercise the app-level Sentry
+ * ErrorBoundary (see AppErrorFallback). It is mounted at `/__boundary-check`
+ * ONLY when `import.meta.env.DEV` is true, so Vite dead-code-eliminates it from
+ * production builds — there is no reachable crash path in the shipped bundle.
+ */
+function BoundaryCheck(): never {
+  throw new Error('BoundaryCheck: forced render error for E2E ErrorBoundary test')
+}
+
 function App() {
   return (
     <Routes>
@@ -74,6 +84,12 @@ function App() {
           </Route>
         </Route>
       </Route>
+
+      {/* Dev-only crash route for the ErrorBoundary E2E test. Gated on DEV so
+          it is stripped from production builds (see BoundaryCheck above). */}
+      {import.meta.env.DEV && (
+        <Route path="/__boundary-check" element={<BoundaryCheck />} />
+      )}
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

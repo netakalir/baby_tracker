@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Banner } from '../../components/ui/Banner'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
-import type { Event, EventType, FeedingMetadata } from '../../types/database'
-import type { ImmediateEventType, TimerEventType } from './api'
+import type { Event, EventType } from '../../types/database'
+import { isRunningTimerEvent, type ImmediateEventType, type TimerEventType } from './api'
 import { eventColor } from './clock/eventColors'
+import { getFeedingType } from './eventMetadata'
 import {
   FEEDING_CHOICES,
   breastSideLabel,
@@ -23,6 +24,13 @@ interface QuickLogButtonsProps {
   childId: string
   /** The child's events for today, used to detect which timers are running. */
   events: Event[]
+  /**
+   * Current wall-clock time as epoch ms, ticked once a second by the parent
+   * while a timer runs, for the live stopwatch on an active timer button. The
+   * parent owns the single tick (shared with the clock) so the bar never runs a
+   * second interval of its own; it is unused while `disabled`.
+   */
+  now: number
   /**
    * Neutralises every button (grey, non-interactive) without unmounting the bar
    * — used by the historical view so a past day cannot be logged under (spec
@@ -273,7 +281,7 @@ function FeedingAmountMenu({ disabled, displayUnit, onSelect }: FeedingAmountMen
   )
 }
 
-export function QuickLogButtons({ childId, events, disabled = false }: QuickLogButtonsProps) {
+export function QuickLogButtons({ childId, events, now, disabled = false }: QuickLogButtonsProps) {
   const logMutation = useLogImmediateEvent(childId)
   const startTimerMutation = useStartTimerEvent(childId)
   const stopTimerMutation = useStopTimerEvent(childId)
@@ -292,22 +300,12 @@ export function QuickLogButtons({ childId, events, disabled = false }: QuickLogB
     // "live" active timer to stop, so the buttons stay in their idle look.
     if (disabled) return byType
     for (const event of events) {
-      if (event.end_time !== null) continue
-      if (event.type === 'sleep' || event.type === 'feeding') byType.set(event.type, event)
+      if (!isRunningTimerEvent(event)) continue
+      // `isRunningTimerEvent` already narrows to the two timer types.
+      byType.set(event.type as TimerEventType, event)
     }
     return byType
   }, [events, disabled])
-
-  // Tick once a second only while at least one timer is running, so the live
-  // stopwatch updates without re-rendering the whole screen when idle.
-  const [now, setNow] = useState(() => Date.now())
-  const hasActiveTimer = activeTimers.size > 0
-  useEffect(() => {
-    if (!hasActiveTimer) return
-    setNow(Date.now())
-    const intervalId = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(intervalId)
-  }, [hasActiveTimer])
 
   useEffect(() => {
     return () => {
@@ -356,8 +354,7 @@ export function QuickLogButtons({ childId, events, disabled = false }: QuickLogB
   }
 
   const feedingEvent = activeTimers.get('feeding')
-  const isBottleFeeding =
-    (feedingEvent?.metadata as FeedingMetadata | null)?.feeding_type === 'bottle'
+  const isBottleFeeding = feedingEvent ? getFeedingType(feedingEvent) === 'bottle' : false
 
   /**
    * Stops the running feeding. A bottle first opens the amount picker (the

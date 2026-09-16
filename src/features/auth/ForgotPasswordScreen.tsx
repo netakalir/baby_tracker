@@ -47,7 +47,7 @@ export function ForgotPasswordScreen() {
                 hasError={Boolean(fieldError)}
                 onChange={(event) => setEmail(event.target.value)}
               />
-              <FormError message={fieldError} />
+              <FormError id="email-error" message={fieldError} />
             </div>
 
             {mutation.isError && (

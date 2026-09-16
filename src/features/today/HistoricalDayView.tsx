@@ -185,7 +185,9 @@ export function HistoricalDayView({
 
       {/* Estimate banners are intentionally omitted in historical mode (§9.3). */}
 
-      <QuickLogButtons childId={childId} events={events ?? []} disabled />
+      {/* Disabled on a past day: the buttons are inert and show no live
+          stopwatch, so `now` is never read — a static value suffices. */}
+      <QuickLogButtons childId={childId} events={events ?? []} now={0} disabled />
     </>
   )
 }

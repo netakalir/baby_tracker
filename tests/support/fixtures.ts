@@ -168,10 +168,31 @@ export const test = base.extend<{ factory: TestFactory }>({
       },
 
       async addMember(user, familyId) {
+        // Membership can no longer be self-inserted directly (the open INSERT
+        // policy was removed); it is created only via the join RPC against a
+        // real invite. The service role has no grant on family_invites, so the
+        // invite is created by an existing member (the seeded family owner)
+        // through the same RLS-approved "members can create invites" path the
+        // app uses, then `user` joins via `join_family_by_token`.
+        const seeded = seededFamilies.find((family) => family.familyId === familyId)
+        if (!seeded) {
+          throw new Error(`addMember: no seeded owner found for family ${familyId}`)
+        }
+        const ownerClient = authedClients.get(seeded.ownerId)
+        if (!ownerClient) {
+          throw new Error(`addMember: no authenticated client for owner ${seeded.ownerId}`)
+        }
+
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        const { data: invite, error: inviteError } = await ownerClient
+          .from('family_invites')
+          .insert({ family_id: familyId, invited_by: seeded.ownerId, expires_at: expiresAt })
+          .select('token')
+          .single<{ token: string }>()
+        if (inviteError) throw inviteError
+
         const client = await clientFor(user)
-        const { error } = await client
-          .from('family_members')
-          .insert({ family_id: familyId, user_id: user.id, role: 'parent' })
+        const { error } = await client.rpc('join_family_by_token', { p_token: invite.token })
         if (error) throw error
       },
     }

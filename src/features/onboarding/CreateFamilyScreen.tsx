@@ -53,7 +53,7 @@ export function CreateFamilyScreen() {
               hasError={Boolean(fieldError)}
               onChange={(event) => setName(event.target.value)}
             />
-            <FormError message={fieldError} />
+            <FormError id="name-error" message={fieldError} />
           </div>
 
           {mutation.isError && <Banner variant="error" message="לא הצלחנו ליצור את המשפחה. נסה שוב." />}

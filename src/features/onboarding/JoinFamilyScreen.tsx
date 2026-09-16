@@ -32,7 +32,7 @@ export function JoinFamilyScreen() {
   const [fieldError, setFieldError] = useState<string | undefined>()
 
   const mutation = useMutation({
-    mutationFn: (input: { token: string }) => joinFamilyByToken(user!.id, input),
+    mutationFn: (input: { token: string }) => joinFamilyByToken(input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['onboarding-status', user!.id] })
       navigate('/today')
@@ -65,7 +65,7 @@ export function JoinFamilyScreen() {
               hasError={Boolean(fieldError)}
               onChange={(event) => setToken(event.target.value)}
             />
-            <FormError message={fieldError} />
+            <FormError id="token-error" message={fieldError} />
           </div>
 
           {mutation.isError && <Banner variant="error" message={getJoinErrorMessage(mutation.error)} />}

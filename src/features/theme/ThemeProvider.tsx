@@ -1,15 +1,8 @@
 import { useEffect, type ReactNode } from 'react'
-import type { AppTheme } from '../../types/database'
 import { useAuth } from '../auth/useAuth'
+import { DEFAULT_THEME } from '../settings/preferencesDefaults'
 import { useUserPreferences } from '../settings/useUserPreferences'
 import { applyThemeClass, SYSTEM_DARK_QUERY } from './applyTheme'
-
-/**
- * Default before a preference has loaded (or for a signed-out user). Mirrors the
- * user_preferences `theme` column default, so the first paint matches whatever
- * the OS is set to rather than forcing light.
- */
-const DEFAULT_THEME: AppTheme = 'system'
 
 interface ThemeProviderProps {
   children: ReactNode
