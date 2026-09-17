@@ -74,7 +74,7 @@ test.describe('Settings sub-screens', () => {
     await expect(page.getByText(/\/join\?token=/)).toBeVisible()
   })
 
-  test('Display: changes and persists language / theme / units', async ({ page, factory }) => {
+  test('Display: changes and persists theme / units', async ({ page, factory }) => {
     const user = await factory.createUser()
     await factory.seedFamilyWithChild(user, { childName: 'איתי' })
 
@@ -92,10 +92,6 @@ test.describe('Settings sub-screens', () => {
       )
 
     let saved = savePreference()
-    await page.getByRole('radiogroup', { name: 'שפה' }).getByRole('radio', { name: 'English' }).click()
-    await saved
-
-    saved = savePreference()
     await page.getByRole('radiogroup', { name: 'ערכת נושא' }).getByRole('radio', { name: 'כהה' }).click()
     await saved
 
@@ -109,14 +105,39 @@ test.describe('Settings sub-screens', () => {
     // Persisted after reload (each control re-reads from the stored row).
     await page.reload()
     await expect(
-      page.getByRole('radiogroup', { name: 'שפה' }).getByRole('radio', { name: 'English' }),
-    ).toHaveAttribute('aria-checked', 'true')
-    await expect(
       page.getByRole('radiogroup', { name: 'ערכת נושא' }).getByRole('radio', { name: 'כהה' }),
     ).toHaveAttribute('aria-checked', 'true')
     await expect(
       page.getByRole('radiogroup', { name: 'יחידות מדידה' }).getByRole('radio', { name: 'אונקיות' }),
     ).toHaveAttribute('aria-checked', 'true')
+  })
+
+  test('Display: English is not yet selectable and Hebrew stays selected', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'רימון' })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+    await page.goto('/settings/display')
+    await expect(page.getByRole('heading', { name: 'תצוגה ושפה' })).toBeVisible()
+
+    const languageGroup = page.getByRole('radiogroup', { name: 'שפה' })
+    const english = languageGroup.getByRole('radio', { name: 'English' })
+    const hebrew = languageGroup.getByRole('radio', { name: 'עברית' })
+
+    // English (i18n not built yet) is disabled and cannot be selected; Hebrew,
+    // the only working language, stays the selected option.
+    await expect(english).toBeDisabled()
+    await expect(hebrew).toHaveAttribute('aria-checked', 'true')
+    await expect(page.getByText('אנגלית תהיה זמינה בקרוב - עובדים על זה')).toBeVisible()
+
+    // A forced click must not change the stored language (the control ignores it).
+    await english.click({ force: true }).catch(() => {})
+    await expect(hebrew).toHaveAttribute('aria-checked', 'true')
+    await expect(english).toHaveAttribute('aria-checked', 'false')
   })
 
   test('Notifications: toggles a reminder and persists it', async ({ page, factory }) => {
