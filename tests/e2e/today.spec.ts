@@ -68,6 +68,127 @@ test.describe('Today screen - quick logging', () => {
   })
 })
 
+test.describe('Today screen - quick-log menus (dismiss & fit)', () => {
+  // The feeding/mood buttons open a popup menu. Two behaviours are guarded here:
+  // a tap anywhere outside the menu dismisses it (without triggering an action),
+  // and on a narrow phone viewport the menu stays fully on-screen (it used to be
+  // centred over an edge button and get clipped past the screen edge).
+
+  test('a tap outside the feeding menu dismisses it without starting a feed', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'יובל' })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    // Open the breast/bottle menu.
+    await page.getByRole('button', { name: 'התחלת האכלה' }).click()
+    const feedingMenu = page.getByRole('menu', { name: 'בחירת אופן האכלה' })
+    await expect(feedingMenu).toBeVisible()
+
+    // A tap outside the menu (on the screen heading) closes it...
+    await page.getByRole('heading', { name: 'יובל' }).click()
+    await expect(feedingMenu).toBeHidden()
+
+    // ...and no feed was started: the button is still "start", not "stop".
+    await expect(page.getByRole('button', { name: 'התחלת האכלה' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'עצירת האכלה' })).toHaveCount(0)
+  })
+
+  test('a tap outside the mood menu dismisses it', async ({ page, factory }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'אלה' })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    await page.getByRole('button', { name: 'רישום מצב רוח' }).click()
+    const moodMenu = page.getByRole('menu', { name: 'בחירת מצב רוח' })
+    await expect(moodMenu).toBeVisible()
+
+    await page.getByRole('heading', { name: 'אלה' }).click()
+    await expect(moodMenu).toBeHidden()
+    // No mood was logged (no confirmation appeared).
+    await expect(page.getByRole('status')).toHaveCount(0)
+  })
+
+  test('opening one menu closes the other - only one is ever open', async ({ page, factory }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'רועי' })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    const feedingMenu = page.getByRole('menu', { name: 'בחירת אופן האכלה' })
+    const moodMenu = page.getByRole('menu', { name: 'בחירת מצב רוח' })
+
+    // Open feeding, then open mood: feeding must close so both never show at once.
+    await page.getByRole('button', { name: 'התחלת האכלה' }).click()
+    await expect(feedingMenu).toBeVisible()
+
+    await page.getByRole('button', { name: 'רישום מצב רוח' }).click()
+    await expect(moodMenu).toBeVisible()
+    await expect(feedingMenu).toBeHidden()
+
+    // And the symmetric direction: reopening feeding closes mood.
+    await page.getByRole('button', { name: 'התחלת האכלה' }).click()
+    await expect(feedingMenu).toBeVisible()
+    await expect(moodMenu).toBeHidden()
+  })
+
+  test('on a narrow phone viewport the feeding menu stays within the screen', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'טליה' })
+
+    // A narrow phone width is where the centred menu used to overflow the edge.
+    await page.setViewportSize({ width: 375, height: 812 })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    await page.getByRole('button', { name: 'התחלת האכלה' }).click()
+    const feedingMenu = page.getByRole('menu', { name: 'בחירת אופן האכלה' })
+    await expect(feedingMenu).toBeVisible()
+
+    // The menu's box must sit fully inside the viewport, both edges (allowing a
+    // 1px rounding tolerance) - the regression guard for the clipping bug.
+    const box = await feedingMenu.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.x).toBeGreaterThanOrEqual(-1)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(375 + 1)
+  })
+
+  test('the quick-log bar fits within a very narrow (320px) phone screen', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'נגה' })
+
+    // 320px is the narrowest real phone (e.g. iPhone SE). The four fixed-size
+    // buttons used to overflow here; they must now shrink to fit any width.
+    await page.setViewportSize({ width: 320, height: 720 })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    // Every quick-log button must sit fully within the 320px screen, both edges.
+    const labels = ['התחלת האכלה', 'התחלת שינה', 'רישום החתלה', 'רישום מצב רוח']
+    for (const name of labels) {
+      const box = await page.getByRole('button', { name }).boundingBox()
+      expect(box, name).not.toBeNull()
+      expect(box!.x, name).toBeGreaterThanOrEqual(-1)
+      expect(box!.x + box!.width, name).toBeLessThanOrEqual(320 + 1)
+    }
+  })
+})
+
 test.describe('Today screen - estimate banners', () => {
   // The two cards below the clock ("next feeding" / "next sleep") render the
   // contract states (estimate-contract.md §3) from the `useEstimates` query,
