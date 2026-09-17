@@ -201,7 +201,7 @@ export function AuthPage() {
         >
           <span className="flex items-center justify-center gap-2">
             <GoogleIcon />
-            המשך עם Google
+            המשך באמצעות Google
           </span>
         </Button>
       </Card>
