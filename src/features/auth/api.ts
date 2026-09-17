@@ -15,6 +15,21 @@ export async function signIn({ email, password }: SignInInput): Promise<void> {
   if (error) throw error
 }
 
+/**
+ * Starts the Google OAuth flow. On success the browser is redirected to Google
+ * and back to the app root, where `AuthProvider` picks up the session and
+ * `RootRedirect` routes on by onboarding status - so this resolves only when the
+ * redirect could NOT be started (an error worth surfacing). Google accounts
+ * arrive with a confirmed email, so they skip the email-verification step.
+ */
+export async function signInWithGoogle(): Promise<void> {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin },
+  })
+  if (error) throw error
+}
+
 export async function signOut(): Promise<void> {
   const { error } = await supabase.auth.signOut()
   if (error) throw error
