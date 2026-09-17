@@ -183,7 +183,8 @@ export function DisplayScreen() {
               onChange={(value) => savePreferences({ language: value })}
             />
             <p id="language-coming-soon" className="mt-2 text-xs text-neutral-500">
-              {LANGUAGE_COMING_SOON_NOTE}
+              {LANGUAGE_COMING_SOON_NOTE}{' '}
+              <span aria-hidden="true">🚧</span>
             </p>
           </SettingSection>
 
