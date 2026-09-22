@@ -50,9 +50,15 @@ const LOGGED_LABELS: Record<EventType, string> = {
   mood: 'נרשם מצב רוח',
 }
 
-/** The round tap target shared by every quick-log button. */
+/**
+ * The round tap target shared by every quick-log button. Its size is fluid: the
+ * circle fills its column (each button gets an equal `flex-1` share of the bar)
+ * but never grows past 5rem, so the four buttons scale down to fit any screen
+ * width instead of overflowing on a narrow phone, while staying 5rem on roomy
+ * screens. `aspect-square` keeps it a circle at every size.
+ */
 const CIRCLE_CLASSES =
-  'flex h-20 w-20 flex-col items-center justify-center gap-0.5 rounded-full border text-3xl ' +
+  'flex aspect-square w-full max-w-20 flex-col items-center justify-center gap-0.5 rounded-full border text-3xl ' +
   'shadow-md transition-transform duration-fast active:scale-95 focus:outline-none ' +
   'focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed'
 
@@ -108,12 +114,14 @@ function QuickLogButton({
       aria-haspopup={ariaHasPopup ? 'menu' : undefined}
       aria-expanded={ariaHasPopup ? ariaExpanded : undefined}
       aria-pressed={ariaPressed}
-      className="flex flex-col items-center gap-1.5"
+      className="flex w-full flex-col items-center gap-1.5"
     >
       <span aria-hidden="true" className={`${CIRCLE_CLASSES} ${ringClass} ${surfaceClass}`}>
         {children}
       </span>
-      <span className="text-xs font-medium text-neutral-700">{label}</span>
+      <span className="w-full truncate text-center text-xs font-medium text-neutral-700">
+        {label}
+      </span>
     </button>
   )
 }
@@ -205,7 +213,10 @@ function FeedingChoiceMenu({ disabled, onSelect }: FeedingChoiceMenuProps) {
     <div
       role="menu"
       aria-label="בחירת אופן האכלה"
-      className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 flex-col items-stretch gap-1 rounded-2xl border border-neutral-200 bg-neutral-0 p-2 shadow-md"
+      // Anchored to the button's right edge (not centred) so the menu opens
+      // inward and never spills past the screen edge on a narrow viewport - the
+      // feeding button is the rightmost in the bar. See FeedingAmountMenu too.
+      className="absolute bottom-full right-0 mb-2 flex flex-col items-stretch gap-1 rounded-2xl border border-neutral-200 bg-neutral-0 p-2 shadow-md"
     >
       {lastSide && (
         <p className="px-1 pb-0.5 text-center text-xs text-neutral-500">
@@ -251,7 +262,9 @@ function FeedingAmountMenu({ disabled, displayUnit, onSelect }: FeedingAmountMen
     <div
       role="menu"
       aria-label="בחירת כמות בקבוק"
-      className="absolute bottom-full left-1/2 mb-2 flex w-28 -translate-x-1/2 flex-col items-stretch gap-1 rounded-2xl border border-neutral-200 bg-neutral-0 p-2 shadow-md"
+      // Right-anchored for the same reason as FeedingChoiceMenu: keep the menu
+      // fully on-screen on a narrow viewport instead of centring past the edge.
+      className="absolute bottom-full right-0 mb-2 flex w-28 flex-col items-stretch gap-1 rounded-2xl border border-neutral-200 bg-neutral-0 p-2 shadow-md"
     >
       <p className="px-1 pb-0.5 text-center text-xs text-neutral-500">כמה שתה?</p>
       <div className="flex max-h-44 flex-col gap-1 overflow-y-auto">
@@ -291,6 +304,11 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
   const [isAmountOpen, setIsAmountOpen] = useState(false)
   const [confirmedType, setConfirmedType] = useState<EventType | null>(null)
   const confirmationTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Wrappers for the two buttons that own a popup menu. A pointer down outside
+  // both dismisses any open menu (below); a tap on the button itself or a menu
+  // item falls inside its wrapper and is left to that element's own handler.
+  const feedingMenuWrapper = useRef<HTMLDivElement>(null)
+  const moodMenuWrapper = useRef<HTMLDivElement>(null)
 
   // The single running timer per type (if any). The UI toggles a button to
   // "stop" while its type is active, which is what enforces one-active-per-type.
@@ -314,6 +332,29 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
       }
     }
   }, [])
+
+  const isAnyMenuOpen = isFeedingOpen || isAmountOpen || isMoodOpen
+
+  // Dismiss an open menu when the user taps anywhere outside it (including
+  // another button or the background), so a menu never lingers. A tap on the
+  // owning button or a menu item stays inside its wrapper and is handled there
+  // (the button toggles, an item selects). The listener is attached only while a
+  // menu is open. `pointerdown` covers both touch and mouse.
+  useEffect(() => {
+    if (!isAnyMenuOpen) return
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node
+      if (feedingMenuWrapper.current?.contains(target)) return
+      if (moodMenuWrapper.current?.contains(target)) return
+      setIsFeedingOpen(false)
+      setIsAmountOpen(false)
+      setIsMoodOpen(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [isAnyMenuOpen])
 
   function showConfirmation(type: EventType) {
     setConfirmedType(type)
@@ -362,10 +403,24 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
    */
   function handleFeedingStop(eventId: string) {
     if (isBottleFeeding) {
+      setIsMoodOpen(false)
       setIsAmountOpen(true)
       return
     }
     handleStopTimer('feeding', eventId)
+  }
+
+  // Only one popup menu is open at a time: opening one closes the other, so a tap
+  // on a second menu's button never leaves both showing.
+  function toggleFeedingMenu() {
+    setIsMoodOpen(false)
+    setIsFeedingOpen((open) => !open)
+  }
+
+  function toggleMoodMenu() {
+    setIsFeedingOpen(false)
+    setIsAmountOpen(false)
+    setIsMoodOpen((open) => !open)
   }
 
   /** Records the chosen bottle amount (or none, when skipped) and stops the feed. */
@@ -407,7 +462,7 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
         )}
 
         <div className="flex items-start justify-center gap-3">
-          <div className="relative flex flex-col items-center">
+          <div ref={feedingMenuWrapper} className="relative flex min-w-0 flex-1 flex-col items-center">
             {isFeedingOpen && <FeedingChoiceMenu disabled={isPending} onSelect={handleFeedingSelect} />}
             {isAmountOpen && (
               <FeedingAmountMenu
@@ -425,38 +480,44 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
               disabled={isPending}
               idleHasPopup
               idleExpanded={isFeedingOpen}
-              onStart={() => setIsFeedingOpen((open) => !open)}
+              onStart={toggleFeedingMenu}
               onStop={handleFeedingStop}
             />
           </div>
 
-          <TimerButton
-            type="sleep"
-            emoji="😴"
-            activeEvent={activeTimers.get('sleep')}
-            now={now}
-            disabled={isPending}
-            onStart={() => handleStartTimer('sleep')}
-            onStop={(eventId) => handleStopTimer('sleep', eventId)}
-          />
+          <div className="flex min-w-0 flex-1 flex-col items-center">
+            <TimerButton
+              type="sleep"
+              emoji="😴"
+              activeEvent={activeTimers.get('sleep')}
+              now={now}
+              disabled={isPending}
+              onStart={() => handleStartTimer('sleep')}
+              onStop={(eventId) => handleStopTimer('sleep', eventId)}
+            />
+          </div>
 
-          <QuickLogButton
-            label="החתלה"
-            ariaLabel="רישום החתלה"
-            ringClass={RING_BY_TYPE.diaper}
-            surfaceClass={IDLE_CIRCLE_CLASSES}
-            disabled={isPending}
-            onClick={() => handleLog('diaper')}
-          >
-            🧷
-          </QuickLogButton>
+          <div className="flex min-w-0 flex-1 flex-col items-center">
+            <QuickLogButton
+              label="החתלה"
+              ariaLabel="רישום החתלה"
+              ringClass={RING_BY_TYPE.diaper}
+              surfaceClass={IDLE_CIRCLE_CLASSES}
+              disabled={isPending}
+              onClick={() => handleLog('diaper')}
+            >
+              🧷
+            </QuickLogButton>
+          </div>
 
-          <div className="relative flex flex-col items-center">
+          <div ref={moodMenuWrapper} className="relative flex min-w-0 flex-1 flex-col items-center">
             {isMoodOpen && (
               <div
                 role="menu"
                 aria-label="בחירת מצב רוח"
-                className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 gap-1 rounded-2xl border border-neutral-200 bg-neutral-0 p-2 shadow-md"
+                // Left-anchored (the mood button is the leftmost in the bar) so
+                // the menu opens inward and stays on-screen on a narrow viewport.
+                className="absolute bottom-full left-0 mb-2 flex gap-1 rounded-2xl border border-neutral-200 bg-neutral-0 p-2 shadow-md"
               >
                 {MOOD_OPTIONS.map((option) => (
                   <button
@@ -480,7 +541,7 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
               ringClass={RING_BY_TYPE.mood}
               surfaceClass={IDLE_CIRCLE_CLASSES}
               disabled={isPending}
-              onClick={() => setIsMoodOpen((open) => !open)}
+              onClick={toggleMoodMenu}
               ariaHasPopup
               ariaExpanded={isMoodOpen}
             >

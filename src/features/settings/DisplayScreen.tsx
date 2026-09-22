@@ -12,11 +12,18 @@ import { useUpsertUserPreferences, useUserPreferences } from './useUserPreferenc
 interface SelectOption<T extends string> {
   value: T
   label: string
+  /** A single option that cannot be picked yet (e.g. a not-yet-built feature). */
+  disabled?: boolean
 }
+
+/** Copy shown under the language control while English is not yet available. */
+const LANGUAGE_COMING_SOON_NOTE = 'אנגלית תהיה זמינה בקרוב - עובדים על זה'
 
 const LANGUAGE_OPTIONS: readonly SelectOption<AppLanguage>[] = [
   { value: 'he', label: 'עברית' },
-  { value: 'en', label: 'English' },
+  // English (i18n) is not built yet - shown disabled so the option is visible
+  // but cannot be selected into a language that does nothing.
+  { value: 'en', label: 'English', disabled: true },
 ]
 
 const THEME_OPTIONS: readonly SelectOption<AppTheme>[] = [
@@ -36,6 +43,8 @@ interface SegmentedControlProps<T extends string> {
   onChange: (value: T) => void
   disabled?: boolean
   ariaLabel: string
+  /** Id of an element that explains the control (e.g. a "coming soon" caption). */
+  ariaDescribedBy?: string
 }
 
 /**
@@ -49,27 +58,34 @@ function SegmentedControl<T extends string>({
   onChange,
   disabled = false,
   ariaLabel,
+  ariaDescribedBy,
 }: SegmentedControlProps<T>) {
   return (
     <div
       role="radiogroup"
       aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
       className="flex gap-1 rounded-lg border border-neutral-200 bg-neutral-50 p-1"
     >
       {options.map((option) => {
         const isSelected = option.value === value
+        // A single not-yet-available option (option.disabled) is shown faded with
+        // a translucent surface, on top of the whole-control `disabled` (saving).
+        const isOptionDisabled = disabled || option.disabled === true
         return (
           <button
             key={option.value}
             type="button"
             role="radio"
             aria-checked={isSelected}
-            disabled={disabled}
+            disabled={isOptionDisabled}
             onClick={() => onChange(option.value)}
             className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-60 ${
-              isSelected
-                ? 'bg-neutral-0 text-neutral-900 shadow-sm'
-                : 'text-neutral-600 hover:text-neutral-900'
+              option.disabled
+                ? 'bg-neutral-200/50 text-neutral-400'
+                : isSelected
+                  ? 'bg-neutral-0 text-neutral-900 shadow-sm'
+                  : 'text-neutral-600 hover:text-neutral-900'
             }`}
           >
             {option.label}
@@ -160,11 +176,16 @@ export function DisplayScreen() {
           <SettingSection title="שפה">
             <SegmentedControl
               ariaLabel="שפה"
+              ariaDescribedBy="language-coming-soon"
               options={LANGUAGE_OPTIONS}
               value={language}
               disabled={isSaving}
               onChange={(value) => savePreferences({ language: value })}
             />
+            <p id="language-coming-soon" className="mt-2 text-xs text-neutral-500">
+              {LANGUAGE_COMING_SOON_NOTE}{' '}
+              <span aria-hidden="true">🚧</span>
+            </p>
           </SettingSection>
 
           <SettingSection title="ערכת נושא">

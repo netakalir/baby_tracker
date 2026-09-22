@@ -1,5 +1,5 @@
 # סיכום התקדמות - Baby Tracker
-**תאריך עדכון אחרון:** 1 בספטמבר 2026
+**תאריך עדכון אחרון:** 17 בספטמבר 2026
 
 ---
 
@@ -137,6 +137,8 @@
 
 ## מה בתהליך כרגע 🔄
 
+**עדכון 2026-09-17 — התחברות באמצעות Google (OAuth), ענף `feat/google-oauth`, PR #31 → integ:** נוסף כפתור **"המשך באמצעות Google"** למסך ההתחברות, לצד אימייל/סיסמה. `signInWithGoogle()` ב-`auth/api.ts` קורא ל-`supabase.auth.signInWithOAuth({ provider:'google', redirectTo: origin })`; אחרי החזרה `AuthProvider` קולט את ה-session ו-`RootRedirect` מנתב לפי onboarding. משתמשי Google מגיעים עם אימייל מאומת → מדלגים על אימות המייל. הכפתור ב-`AuthPage.tsx` (variant secondary, לוגו Google מוטמע כ-SVG, מפריד "או", באנר שגיאה נפרד). ללא E2E (התחברות Google חיצונית לא ניתנת להרצה ב-Playwright); code-reviewer עבר נקי; אומת ידנית מקצה-לקצה מול פרויקט הבדיקות. **הגדרה חיצונית שבוצעה:** OAuth consent screen (External, Published, scopes בסיסיים) + OAuth Web client אחד עם redirect URIs ל-callback של שני פרויקטי Supabase; ספק Google הופעל בשני הפרויקטים (Client ID/Secret). נותר לעתיד (לא דחוף): Custom Auth Domain של Supabase כדי שמסך ההסכמה של גוגל יציג דומיין ממותג במקום `<ref>.supabase.co` (תוסף בתשלום; חשיפת ה-URL הזו אינה בעיית אבטחה — הכתובת ציבורית ממילא).
+
 משימות 2 ו-3 נסגרו ומוזגו ל-`main` (כולל הקדמה חלקית של טיימר משימה 4 ו-Realtime משימה 8). פיצול ההאכלה (שלב 6) מוזג ל-`main` (PR #4). **מסך ההגדרות (משימה 12, שלב 7 למטה) הושלם ומוזג ל-`main` (PR #6)**, כולל גמר החלטת ה-scoping: `units` → per-user (`user_preferences`), `day_start` → per-child (`children`), timezone → אזור-המכשיר, `family_settings` → placeholder ריק (אין הגדרה שהיא באמת per-family). התיעוד המלא של ההחלטה: `settings-scoping-decisions.md`.
 
 **עדכון 2026-08-06 — משימה 5 + תשתית ההגדרות מוזגו ל-`main`** (squash `feat/estimates-settings-integration`): (א) בנרי צפי האכלה/שינה חיים מול פונקציית `estimates`; (ב) ארבעת תתי-מסכי ההגדרות מחוברים בפועל (profile / baby & family / display / notifications) עם `api.ts`+hooks (חוב א' מגל 2 נסגר); (ג) RPC `family_members_with_identity` להצגת שם/אימייל אמיתי של חברי משפחה (חוב ב' נסגר); (ד) מחיקת חשבון אמיתית דרך פונקציית `delete-user` (חוב ד' נסגר); (ה) טסטי E2E לארבעת תתי-המסכים + בידוד זהות חברי משפחה (חוב ג' נסגר). תוקן גם באג אמיתי: שמירת פרטי תינוק לא הציגה באנר אישור.
@@ -154,7 +156,9 @@
 - **TZ**: `todayDate.ts` — resolution עצלני של אזור-זמן (memoized לפי zone) במקום בטעינת מודול.
 - **UI**: C1 — `aria-invalid`/`aria-describedby` ל-`Input` (8 call-sites); C2 — טסטים ל-`errorMessages`/`queryClient`; Button focus-visible+aria-busy; `eventMetadata.ts` — accessors מטיפוסים (jsonb לא צומצם); retry לא-מנסה-שוב על auth-missing; EstimateBanners `timeZone` מפורש.
 
-**צינור:** כל סוכן → תיקון + טסטים. ואז **code-reviewer ייעודי על כל ענף בנפרד** (הסוכנים לא יכלו להריץ בעצמם) — כולם נקיים פרט לממצא אחד ב-UI (EstimateBanners החזיר דפוס tz-eager) ש**תוקן** בשלב האיחוד (`b1e16d2`, עצלני תואם TZ). **CR מאוחד** על כל ה-diff יחד = נקי. regression מקומי: tsc נקי, lint נקי, 47/47 unit. **חסום על המשתמש:** `supabase db push` (2 מיגרציות) על integ+prod, redeploy ל-`delete-user`, ואז E2E מלא — לפני מיזוג.
+**צינור:** כל סוכן → תיקון + טסטים. ואז **code-reviewer ייעודי על כל ענף בנפרד** (הסוכנים לא יכלו להריץ בעצמם) — כולם נקיים פרט לממצא אחד ב-UI (EstimateBanners החזיר דפוס tz-eager) ש**תוקן** בשלב האיחוד (`b1e16d2`, עצלני תואם TZ). **CR מאוחד** על כל ה-diff יחד = נקי. regression מקומי: tsc נקי, lint נקי, 47/47 unit. **חסום על המשתמש:** `supabase db push` (2 מיגרציות) על integ+prod, redeploy ל-`delete-user`, ואז E2E מלא — לפני מיזוג. **בוצע (2026-09-16):** מיגרציות נדחפו ל-integ+prod, `delete-user` נפרס מחדש, E2E 44/44 עבר, PR #27+#28 מוזגו ל-`main` — סבב CR #2 חי בפרודקשן.
+
+**עדכון 2026-09-17 — תיקון מובייל במסך "היום" (ענף `fix/feeding-menu-clip-and-dismiss`, PR #29 → integ):** שלושה ליקויים שהתגלו בפתיחת האפליקציה בטלפון אמיתי, כולם ב-`QuickLogButtons.tsx`. (1) **תפריטי פופ-אפ נחתכו בקצה המסך** — התפריטים (בחירת האכלה / כמות בקבוק / מצב רוח) היו ממורכזים מעל כפתורם (`left-1/2 -translate-x-1/2`) וגלשו מעבר לקצה במסך צר (תפריט ההאכלה הימני נחתך). עוגנו לקצה הכפתור הקרוב (האכלה/כמות `right-0`, מצב-רוח `left-0`) כך שנפתחים פנימה ונשארים במסך. (2) **סגירה** — התפריט נסגר רק בלחיצה חוזרת על הכפתור; נוסף מאזין `pointerdown` (פעיל רק כשתפריט פתוח) שסוגר כל תפריט בלחיצה מחוץ לעטיפות (לחיצה על הכפתור/פריט מטופלת כרגיל), והתפריטים הפכו **בלעדיים הדדית**. (3) **סרגל כפתורים לא-רספונסיבי** — 4 כפתורים בגודל קבוע (5rem) גלשו מתחת ל-~356px ונשברו כבר ב-320px (iPhone SE). הסרגל הפך **נוזלי**: כל כפתור בעמודת `flex-1` שווה, העיגול `aspect-square w-full max-w-20` ממלא אותה אך נעצר על 5rem — מתאים לכל רוחב עד **רצפת 320px** (החלטת עיצוב חדשה: מתחת ל-320 התכווצות חלקה בלבד, ללא שבירה בשום רוחב אמיתי). בדיקות: tsc+lint נקיים, **code-reviewer ×3 נקי**, E2E `today.spec.ts` 17/17 (כולל 6 טסטים חדשים: סגירה-בחוץ ×2, בלעדיות, התאמת תפריט 375px, התאמת סרגל 320px).
 
 **עדכון 2026-09-03 — תוקן: E2E תלוי-יום-בשבוע (סגירת פריט מעקב):** ב-`tests/e2e/today-historical.spec.ts` (טסט לחיצה על עמודת שבוע) הזרעת "אתמול" חושבה מ-`Date.now()` אמיתי, כך שהטסט נכשל כל אימת שהריצה קרתה ביום ראשון (אתמול = שבת = השבוע הקודם ב-לוח שבוע א'-ש', לכן השבוע הנוכחי ריק והכפתור המצופה לא קיים). זו הייתה שבריריות-טסט, לא באג אפליקציה. תוקן ע"י הקפאת שעון ה-Playwright (`page.clock.setFixedTime`) לרגע קבוע (יום רביעי) לפני ה-sign-in, וחישוב כל התאריכים ב-Node מאותו רגע קבוע במקום `Date.now()`. אותה שבריריות הפוטנציאלית (זניחה, רק בחלון 00:00–03:00 בימי ראשון) טופלה גם ב-`tests/e2e/week.spec.ts` לעקביות. פריט המעקב "Week column-click test failing" נסגר.
 
@@ -219,7 +223,7 @@
 
 ## החלטות פתוחות שנדחו
 
-1. **Google OAuth** - לא הוגדר עדיין ב-Google Cloud Console. יוסף בהמשך מבלי לשנות קוד קיים
+1. ~~**Google OAuth** - לא הוגדר עדיין ב-Google Cloud Console~~ ✅ **בוצע 2026-09-17** (PR #31): קוד + הגדרת Google Cloud + Supabase, "המשך באמצעות Google" עובד. ראה "מה בתהליך כרגע".
 2. **עיצוב Empty State** - עקרונות קיימים, עיצוב מדויק יוגדר בבנייה
 3. **מקור נתונים מדויק לתוכן AI** - אילו אתרים/מאגרים ה-Edge Function מצטט
 4. **Subagents** - `code-reviewer`, `test-runner`, `rls-auditor` יוקמו כשיהיה מספיק קוד לתחזק
