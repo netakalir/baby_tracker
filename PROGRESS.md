@@ -137,6 +137,8 @@
 
 ## מה בתהליך כרגע 🔄
 
+**עדכון 2026-09-17 — התחברות באמצעות Google (OAuth), ענף `feat/google-oauth`, PR #31 → integ:** נוסף כפתור **"המשך באמצעות Google"** למסך ההתחברות, לצד אימייל/סיסמה. `signInWithGoogle()` ב-`auth/api.ts` קורא ל-`supabase.auth.signInWithOAuth({ provider:'google', redirectTo: origin })`; אחרי החזרה `AuthProvider` קולט את ה-session ו-`RootRedirect` מנתב לפי onboarding. משתמשי Google מגיעים עם אימייל מאומת → מדלגים על אימות המייל. הכפתור ב-`AuthPage.tsx` (variant secondary, לוגו Google מוטמע כ-SVG, מפריד "או", באנר שגיאה נפרד). ללא E2E (התחברות Google חיצונית לא ניתנת להרצה ב-Playwright); code-reviewer עבר נקי; אומת ידנית מקצה-לקצה מול פרויקט הבדיקות. **הגדרה חיצונית שבוצעה:** OAuth consent screen (External, Published, scopes בסיסיים) + OAuth Web client אחד עם redirect URIs ל-callback של שני פרויקטי Supabase; ספק Google הופעל בשני הפרויקטים (Client ID/Secret). נותר לעתיד (לא דחוף): Custom Auth Domain של Supabase כדי שמסך ההסכמה של גוגל יציג דומיין ממותג במקום `<ref>.supabase.co` (תוסף בתשלום; חשיפת ה-URL הזו אינה בעיית אבטחה — הכתובת ציבורית ממילא).
+
 משימות 2 ו-3 נסגרו ומוזגו ל-`main` (כולל הקדמה חלקית של טיימר משימה 4 ו-Realtime משימה 8). פיצול ההאכלה (שלב 6) מוזג ל-`main` (PR #4). **מסך ההגדרות (משימה 12, שלב 7 למטה) הושלם ומוזג ל-`main` (PR #6)**, כולל גמר החלטת ה-scoping: `units` → per-user (`user_preferences`), `day_start` → per-child (`children`), timezone → אזור-המכשיר, `family_settings` → placeholder ריק (אין הגדרה שהיא באמת per-family). התיעוד המלא של ההחלטה: `settings-scoping-decisions.md`.
 
 **עדכון 2026-08-06 — משימה 5 + תשתית ההגדרות מוזגו ל-`main`** (squash `feat/estimates-settings-integration`): (א) בנרי צפי האכלה/שינה חיים מול פונקציית `estimates`; (ב) ארבעת תתי-מסכי ההגדרות מחוברים בפועל (profile / baby & family / display / notifications) עם `api.ts`+hooks (חוב א' מגל 2 נסגר); (ג) RPC `family_members_with_identity` להצגת שם/אימייל אמיתי של חברי משפחה (חוב ב' נסגר); (ד) מחיקת חשבון אמיתית דרך פונקציית `delete-user` (חוב ד' נסגר); (ה) טסטי E2E לארבעת תתי-המסכים + בידוד זהות חברי משפחה (חוב ג' נסגר). תוקן גם באג אמיתי: שמירת פרטי תינוק לא הציגה באנר אישור.
@@ -221,7 +223,7 @@
 
 ## החלטות פתוחות שנדחו
 
-1. **Google OAuth** - לא הוגדר עדיין ב-Google Cloud Console. יוסף בהמשך מבלי לשנות קוד קיים
+1. ~~**Google OAuth** - לא הוגדר עדיין ב-Google Cloud Console~~ ✅ **בוצע 2026-09-17** (PR #31): קוד + הגדרת Google Cloud + Supabase, "המשך באמצעות Google" עובד. ראה "מה בתהליך כרגע".
 2. **עיצוב Empty State** - עקרונות קיימים, עיצוב מדויק יוגדר בבנייה
 3. **מקור נתונים מדויק לתוכן AI** - אילו אתרים/מאגרים ה-Edge Function מצטט
 4. **Subagents** - `code-reviewer`, `test-runner`, `rls-auditor` יוקמו כשיהיה מספיק קוד לתחזק
