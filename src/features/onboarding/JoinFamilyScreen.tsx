@@ -16,6 +16,7 @@ const ERROR_MESSAGES: Record<JoinFamilyErrorCode, string> = {
   expired: 'ההזמנה הזו לא תקפה יותר. בקש קישור חדש.',
   used: 'ההזמנה הזו כבר נוצלה. בקש קישור חדש.',
   'already-in-family': 'אתה כבר חבר במשפחה אחת. האפליקציה תומכת במשפחה אחת בלבד למשתמש בשלב זה.',
+  'family-full': 'המשפחה הזו כבר כוללת שני הורים ולא ניתן להצטרף אליה.',
 }
 
 function getJoinErrorMessage(error: unknown): string {

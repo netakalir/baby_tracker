@@ -143,6 +143,20 @@ function BabyFamilyContent({ familyId, child }: BabyFamilyContentProps) {
 
   const inviteLink = inviteMutation.data ? inviteLinkFor(inviteMutation.data.token) : null
 
+  // MVP product rule: a family is two parents, so once both seats are taken the
+  // invite flow is hidden — there is no one left to invite. This is a UI
+  // convenience only; it is NOT the enforcement layer (an already-generated,
+  // still-valid invite link could still be consumed).
+  //
+  // The invite decision waits for the member count: rendering the invite CTA
+  // before the list resolves and then swapping it for the "full" note produces
+  // a flash of the invite form on first paint. So while the count is unknown we
+  // render nothing here, and only once it is known do we show either the invite
+  // flow or the full-family note.
+  const memberCount = membersQuery.data?.length
+  const membersLoaded = memberCount !== undefined
+  const familyIsFull = membersLoaded && memberCount >= 2
+
   return (
     <div className="mt-6 flex flex-col gap-6">
       {/* Baby name + birth date (per-child) */}
@@ -239,43 +253,62 @@ function BabyFamilyContent({ familyId, child }: BabyFamilyContentProps) {
         )}
       </section>
 
-      {/* Invite second parent (per-family, reuses the onboarding invite flow) */}
+      {/* Invite second parent (per-family, reuses the onboarding invite flow).
+          Once the family already has two parents the invite controls are
+          replaced with an explanatory note. */}
       <section className="rounded-lg border border-neutral-200 bg-neutral-0 p-4 shadow-sm">
         <h2 className="mb-1 text-sm font-semibold text-neutral-900">הזמנת הורה נוסף</h2>
-        <p className="mb-4 text-sm text-neutral-600">
-          צרו קישור הזמנה ושלחו אותו להורה השני כדי שיצטרף לאותה משפחה.
-        </p>
 
-        {inviteMutation.isError && (
-          <div className="mb-4">
-            <Banner variant="error" message={toFriendlyDbErrorMessage(inviteMutation.error)} />
-          </div>
-        )}
-
-        {inviteLink ? (
-          <div className="flex flex-col gap-3">
-            <div className="break-all rounded-md bg-neutral-50 px-3 py-2.5 text-sm text-neutral-800">
-              {inviteLink}
-            </div>
-            <p className="text-xs text-neutral-500">
-              הקישור תקף ל־{INVITE_VALIDITY_DAYS} ימים ולשימוש חד־פעמי.
-            </p>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => void handleCopyInvite(inviteLink)}
-            >
-              {copied ? 'הקישור הועתק' : 'העתקת הקישור'}
-            </Button>
-          </div>
+        {/* Wait for the member count before choosing what to show, so the
+            invite form never flashes in and out when the family is already
+            full. Loading and error are distinct states (mirrors the members
+            list above): an error must not sit on a permanent "טוען...". */}
+        {membersQuery.isLoading ? (
+          <p className="text-sm text-neutral-600">טוען...</p>
+        ) : membersQuery.isError ? (
+          <Banner variant="error" message={toFriendlyDbErrorMessage(membersQuery.error)} />
+        ) : familyIsFull ? (
+          <p className="text-sm text-neutral-600">
+            המשפחה כבר כוללת שני הורים, ולכן לא ניתן להזמין הורה נוסף.
+          </p>
         ) : (
-          <Button
-            type="button"
-            isLoading={inviteMutation.isPending}
-            onClick={() => inviteMutation.mutate()}
-          >
-            יצירת קישור הזמנה
-          </Button>
+          <>
+            <p className="mb-4 text-sm text-neutral-600">
+              צרו קישור הזמנה ושלחו אותו להורה השני כדי שיצטרף לאותה משפחה.
+            </p>
+
+            {inviteMutation.isError && (
+              <div className="mb-4">
+                <Banner variant="error" message={toFriendlyDbErrorMessage(inviteMutation.error)} />
+              </div>
+            )}
+
+            {inviteLink ? (
+              <div className="flex flex-col gap-3">
+                <div className="break-all rounded-md bg-neutral-50 px-3 py-2.5 text-sm text-neutral-800">
+                  {inviteLink}
+                </div>
+                <p className="text-xs text-neutral-500">
+                  הקישור תקף ל־{INVITE_VALIDITY_DAYS} ימים ולשימוש חד־פעמי.
+                </p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void handleCopyInvite(inviteLink)}
+                >
+                  {copied ? 'הקישור הועתק' : 'העתקת הקישור'}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                isLoading={inviteMutation.isPending}
+                onClick={() => inviteMutation.mutate()}
+              >
+                יצירת קישור הזמנה
+              </Button>
+            )}
+          </>
         )}
       </section>
     </div>
