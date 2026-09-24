@@ -97,4 +97,52 @@ test.describe('family sharing', () => {
     await ownerClient.auth.signOut()
     await client.auth.signOut()
   })
+
+  test('a third parent cannot join a full family, even directly via the API', async ({
+    factory,
+  }) => {
+    // A family that already holds its two parents.
+    const parentA = await factory.createUser()
+    const family = await factory.seedFamilyWithChild(parentA, { childName: `מלא-${Date.now()}` })
+    const parentB = await factory.createUser()
+    await factory.addMember(parentB, family.familyId)
+
+    // An outstanding, still-valid invite for the now-full family (the real gap:
+    // a link generated before the family filled stays claimable). Hiding the
+    // invite button in the UI does not revoke it, so the DB must reject it.
+    const token = await factory.seedInvite(parentA, family.familyId)
+
+    const thirdParent = await factory.createUser()
+    const client = createClient(testEnv.supabaseUrl, testEnv.supabaseAnonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+    const { error: signInError } = await client.auth.signInWithPassword({
+      email: thirdParent.email,
+      password: thirdParent.password,
+    })
+    expect(signInError).toBeNull()
+
+    // The DB caps the family at two members under the invite/member row locks.
+    const { error: joinError } = await client.rpc('join_family_by_token', { p_token: token })
+    expect(joinError?.message).toBe('family_full')
+    await client.auth.signOut()
+
+    // The family still has exactly its two members; the third never got in.
+    const ownerClient = createClient(testEnv.supabaseUrl, testEnv.supabaseAnonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+    const { error: ownerSignInError } = await ownerClient.auth.signInWithPassword({
+      email: parentA.email,
+      password: parentA.password,
+    })
+    expect(ownerSignInError).toBeNull()
+    const { count, error: countError } = await ownerClient
+      .from('family_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('family_id', family.familyId)
+    expect(countError).toBeNull()
+    expect(count).toBe(2)
+
+    await ownerClient.auth.signOut()
+  })
 })

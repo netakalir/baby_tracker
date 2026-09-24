@@ -23,7 +23,12 @@ export async function createFamily(input: CreateFamilyInput): Promise<CreatedFam
   return { familyId: familyId as string }
 }
 
-export type JoinFamilyErrorCode = 'invalid' | 'expired' | 'used' | 'already-in-family'
+export type JoinFamilyErrorCode =
+  | 'invalid'
+  | 'expired'
+  | 'used'
+  | 'already-in-family'
+  | 'family-full'
 
 export class JoinFamilyError extends Error {
   code: JoinFamilyErrorCode
@@ -45,6 +50,7 @@ const JOIN_ERROR_BY_DB_MESSAGE: Record<string, JoinFamilyErrorCode> = {
   invite_used: 'used',
   invite_expired: 'expired',
   already_in_family: 'already-in-family',
+  family_full: 'family-full',
 }
 
 export async function joinFamilyByToken(input: JoinFamilyInput): Promise<void> {
