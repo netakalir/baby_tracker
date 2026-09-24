@@ -146,10 +146,16 @@ function BabyFamilyContent({ familyId, child }: BabyFamilyContentProps) {
   // MVP product rule: a family is two parents, so once both seats are taken the
   // invite flow is hidden — there is no one left to invite. This is a UI
   // convenience only; it is NOT the enforcement layer (an already-generated,
-  // still-valid invite link could still be consumed). Gated on a loaded member
-  // list so the option never flashes before the real count is known.
+  // still-valid invite link could still be consumed).
+  //
+  // The invite decision waits for the member count: rendering the invite CTA
+  // before the list resolves and then swapping it for the "full" note produces
+  // a flash of the invite form on first paint. So while the count is unknown we
+  // render nothing here, and only once it is known do we show either the invite
+  // flow or the full-family note.
   const memberCount = membersQuery.data?.length
-  const familyIsFull = memberCount !== undefined && memberCount >= 2
+  const membersLoaded = memberCount !== undefined
+  const familyIsFull = membersLoaded && memberCount >= 2
 
   return (
     <div className="mt-6 flex flex-col gap-6">
@@ -253,7 +259,15 @@ function BabyFamilyContent({ familyId, child }: BabyFamilyContentProps) {
       <section className="rounded-lg border border-neutral-200 bg-neutral-0 p-4 shadow-sm">
         <h2 className="mb-1 text-sm font-semibold text-neutral-900">הזמנת הורה נוסף</h2>
 
-        {familyIsFull ? (
+        {/* Wait for the member count before choosing what to show, so the
+            invite form never flashes in and out when the family is already
+            full. Loading and error are distinct states (mirrors the members
+            list above): an error must not sit on a permanent "טוען...". */}
+        {membersQuery.isLoading ? (
+          <p className="text-sm text-neutral-600">טוען...</p>
+        ) : membersQuery.isError ? (
+          <Banner variant="error" message={toFriendlyDbErrorMessage(membersQuery.error)} />
+        ) : familyIsFull ? (
           <p className="text-sm text-neutral-600">
             המשפחה כבר כוללת שני הורים, ולכן לא ניתן להזמין הורה נוסף.
           </p>
