@@ -74,6 +74,28 @@ test.describe('Settings sub-screens', () => {
     await expect(page.getByText(/\/join\?token=/)).toBeVisible()
   })
 
+  test('Baby & family: hides the invite flow once the family has two parents', async ({
+    page,
+    factory,
+  }) => {
+    const owner = await factory.createUser()
+    const family = await factory.seedFamilyWithChild(owner, { childName: 'תום' })
+
+    // Fill the second (and last) parent seat.
+    const secondParent = await factory.createUser()
+    await factory.addMember(secondParent, family.familyId)
+
+    await signIn(page, owner)
+    await expect(page).toHaveURL(/\/today$/)
+    await page.goto('/settings/baby-family')
+    await expect(page.getByRole('heading', { name: 'תינוק ומשפחה' })).toBeVisible()
+
+    // The members list has loaded both parents, so the invite controls are
+    // replaced with the "family is full" note.
+    await expect(page.getByText('המשפחה כבר כוללת שני הורים, ולכן לא ניתן להזמין הורה נוסף.')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'יצירת קישור הזמנה' })).toBeHidden()
+  })
+
   test('Display: changes and persists theme / units', async ({ page, factory }) => {
     const user = await factory.createUser()
     await factory.seedFamilyWithChild(user, { childName: 'איתי' })
