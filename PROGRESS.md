@@ -1,5 +1,5 @@
 # סיכום התקדמות - Baby Tracker
-**תאריך עדכון אחרון:** 17 בספטמבר 2026
+**תאריך עדכון אחרון:** 29 באוקטובר 2026
 
 ---
 
@@ -22,6 +22,23 @@
 - תת-דומיינים מותאמים: `app.taliatracker.com` (prod) / `integ.taliatracker.com` (integ) — במקום ה-aliasים של Vercel.
 - Resend ייעודי לפרויקט הבדיקות (integ כרגע עשוי להישען על SMTP דיפולטי מוגבל-קצב).
 - error monitoring (Sentry), ערוץ פידבק + הערת פרטיות — ראה issues #20 / #22 ב-GitHub (רשימת Phase 0 לפריסה ל-beta).
+
+---
+
+## ניהול גרסאות אוטומטי (release-please) ✅
+
+**נקבע ויושם (29 באוקטובר 2026, מוזג ל-`main`).** הפרויקט עבר לגרסאות אוטומטיות מבוססות [release-please](https://github.com/googleapis/release-please) עם Conventional Commits.
+
+**איך זה עובד:** בכל דחיפה ל-`main`, workflow פותח/מעדכן אוטומטית "release PR" שמחשב את הגרסה הבאה מהקומיטים, מעדכן את `package.json` ומייצר `CHANGELOG.md`. מיזוג ה-release PR מתייג release ב-git.
+
+**קבצים (על `main`):**
+- `.release-please-manifest.json` — נקודת פתיחה `0.1.0`
+- `release-please-config.json` — `bootstrap-sha` (**זריעה קדימה** — אין changelog רטרואקטיבי ענק על ההיסטוריה הקיימת), `bump-minor-pre-major: true` (ב-0.x כל `feat` מעלה **MINOR** → הגרסה הבאה `0.2.0`), חלוקת סוגי קומיטים ל-changelog (feat/fix/perf/revert גלויים; chore/docs/refactor/test/build/ci מוסתרים)
+- `.github/workflows/release-please.yml` — job של release-please + job שפותח (לא ממזג) PR חזרה של `main`→`integ` לסנכרון עליית הגרסה; ה-back-merge מדלג בנקיות כש-`integ` כבר מעודכן מול `main`
+
+**מקור הגרסה באפליקציה:** `package.json` → מוזרק בבנייה כ-`__APP_VERSION__` (ראה `src/lib/appVersion.ts`); Sentry release = `${version}+${sha}`.
+
+**⚠️ חוב פתוח / פעולה ידנית:** ב-GitHub יש לוודא ש-Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests" **דלוק**, אחרת release-please לא יוכל לפתוח PRים. ה-release PR הראשון (0.2.0) יופיע רק אחרי שה-`feat`/`fix` הבא יתמזג ל-`main`.
 
 ---
 
@@ -136,6 +153,8 @@
 ---
 
 ## מה בתהליך כרגע 🔄
+
+**עדכון 2026-10-29 — הגבלת משפחה לשני הורים + תיקון הבהוב (מוזג ל-`main`, PRs #33/#34):** כשלמשפחה כבר יש שני הורים, אזור "הזמנת הורה נוסף" ב-`BabyFamilyScreen.tsx` מוחלף בהודעה ("המשפחה כבר כוללת שני הורים…") במקום ה-CTA. **אכיפה ברמת השרת (לא רק UI):** מיגרציה `20260922000000_cap_family_at_two_members.sql` משכתבת את ה-RPC `join_family_by_token` כך שתחת נעילת שורה (`for update`) היא דוחה הצטרפות שלישית עם `raise exception 'family_full'`; הלקוח (`onboarding/api.ts`, `JoinFamilyScreen.tsx`) ממפה את זה ל-`JoinFamilyErrorCode` `family-full` עם הודעה בעברית. טסטי E2E: הסתרת ה-CTA ב-UI + דחיית מצטרף שלישי ב-DB (מונה חברים נשאר 2). **תוקן גם הבהוב:** החלטת ההצגה ממתינה למונה החברים (states נפרדים ל-loading/error), כדי שטופס ההזמנה לא יעלה-ונעלם ברינדור הראשון. code-reviewer עבר. ⚠️ **חוב פתוח:** המיגרציה הוחלה על פרויקט **integ בלבד** — נדרש `supabase db push` לפרויקט **prod** כשמקדמים ל-main/prod.
 
 **עדכון 2026-09-17 — התחברות באמצעות Google (OAuth), ענף `feat/google-oauth`, PR #31 → integ:** נוסף כפתור **"המשך באמצעות Google"** למסך ההתחברות, לצד אימייל/סיסמה. `signInWithGoogle()` ב-`auth/api.ts` קורא ל-`supabase.auth.signInWithOAuth({ provider:'google', redirectTo: origin })`; אחרי החזרה `AuthProvider` קולט את ה-session ו-`RootRedirect` מנתב לפי onboarding. משתמשי Google מגיעים עם אימייל מאומת → מדלגים על אימות המייל. הכפתור ב-`AuthPage.tsx` (variant secondary, לוגו Google מוטמע כ-SVG, מפריד "או", באנר שגיאה נפרד). ללא E2E (התחברות Google חיצונית לא ניתנת להרצה ב-Playwright); code-reviewer עבר נקי; אומת ידנית מקצה-לקצה מול פרויקט הבדיקות. **הגדרה חיצונית שבוצעה:** OAuth consent screen (External, Published, scopes בסיסיים) + OAuth Web client אחד עם redirect URIs ל-callback של שני פרויקטי Supabase; ספק Google הופעל בשני הפרויקטים (Client ID/Secret). נותר לעתיד (לא דחוף): Custom Auth Domain של Supabase כדי שמסך ההסכמה של גוגל יציג דומיין ממותג במקום `<ref>.supabase.co` (תוסף בתשלום; חשיפת ה-URL הזו אינה בעיית אבטחה — הכתובת ציבורית ממילא).
 
