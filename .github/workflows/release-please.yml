@@ -41,6 +41,15 @@ jobs:
 
           # A release was just tagged on main; open (not merge) a PR to sync the
           # version bump into the integ staging branch. The user merges manually.
+
+          # Nothing to back-merge if integ already contains every commit on main
+          # (e.g. a re-run after the PR was merged) — skip cleanly rather than
+          # letting `gh pr create` fail the job on an empty diff.
+          if [ "$(git rev-list --count origin/integ..origin/main)" -eq 0 ]; then
+            echo "integ is already up to date with main; nothing to back-merge."
+            exit 0
+          fi
+
           if [ -n "$(gh pr list --base integ --head main --state open --json number --jq '.[].number')" ]; then
             echo "A back-merge PR from main into integ is already open; nothing to do."
             exit 0
