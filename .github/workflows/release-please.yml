@@ -1,0 +1,64 @@
+name: release-please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  back-merge-integ:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.releases_created == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Open back-merge PR from main into integ
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # A release was just tagged on main; open (not merge) a PR to sync the
+          # version bump into the integ staging branch. The user merges manually.
+
+          # Nothing to back-merge if integ already contains every commit on main
+          # (e.g. a re-run after the PR was merged) — skip cleanly rather than
+          # letting `gh pr create` fail the job on an empty diff.
+          if [ "$(git rev-list --count origin/integ..origin/main)" -eq 0 ]; then
+            echo "integ is already up to date with main; nothing to back-merge."
+            exit 0
+          fi
+
+          if [ -n "$(gh pr list --base integ --head main --state open --json number --jq '.[].number')" ]; then
+            echo "A back-merge PR from main into integ is already open; nothing to do."
+            exit 0
+          fi
+
+          body=$'Automated back-merge opened by the release-please workflow after a release was tagged on `main`.\n\nThis syncs the version bump and CHANGELOG from `main` back into `integ`. Review and merge manually.'
+
+          gh pr create \
+            --base integ \
+            --head main \
+            --title "chore: back-merge release into integ" \
+            --body "$body"
