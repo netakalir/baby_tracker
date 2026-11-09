@@ -1,9 +1,13 @@
 import { useCallback, useState } from 'react'
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchPlaceName, isExpectedWeatherOutage, isRetryableWeatherError } from './api'
-import { clearCachedCoordinates } from './cachedCoordinates'
 import type { Coordinates } from './coordinates'
-import { readDevicePosition } from './devicePosition'
+import {
+  readDevicePosition,
+  requestDevicePosition,
+  type DevicePositionFailure,
+  type DevicePositionResult,
+} from './devicePosition'
 import {
   clearSavedCity,
   normalizeSavedCity,
@@ -16,8 +20,8 @@ import {
 export type WeatherLocation =
   /** Reading the device position (may be showing the browser's permission prompt). */
   | { status: 'locating' }
-  /** No saved city and no device position (denied / unsupported / error / timeout). */
-  | { status: 'needs-city' }
+  /** No saved city and no device position; `reason` explains why (see DevicePositionFailure). */
+  | { status: 'needs-city'; reason: DevicePositionFailure }
   | {
       status: 'ready'
       /** Already rounded to one decimal. */
@@ -31,15 +35,20 @@ export interface WeatherLocationControls {
   location: WeatherLocation
   /** Saves `city` on this device and uses it from now on. */
   chooseCity: (city: SavedCity) => void
-  /** Forgets the saved city and cached position, then asks the device again. */
-  locateDevice: () => void
+  /**
+   * Asks the device for a fresh position. Only on success does it switch to
+   * it (dropping the saved city and refreshing the cached position); on
+   * failure the current location is left exactly as it was. Resolves with the
+   * outcome so the caller can explain a failure.
+   */
+  locateDevice: () => Promise<DevicePositionResult>
 }
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 
 /**
- * The device position query. It never errors (`readDevicePosition` resolves
- * null for every failure) and needs no network, so it runs offline too
+ * The device position query. It never errors (`readDevicePosition` resolves a
+ * classified failure instead of rejecting) and needs no network, so it runs offline too
  * (`networkMode: 'always'`). It is read once per mount at most: no retries and
  * no focus/reconnect refetches, so the parent is never re-prompted in a loop.
  */
@@ -70,7 +79,8 @@ export function useWeatherLocation(): WeatherLocationControls {
   const [savedCity, setSavedCity] = useState<SavedCity | null>(readSavedCity)
 
   const devicePosition = useQuery({ ...devicePositionQuery, enabled: savedCity === null })
-  const deviceCoordinates = savedCity === null ? (devicePosition.data ?? null) : null
+  const deviceResult = savedCity === null ? devicePosition.data : undefined
+  const deviceCoordinates = deviceResult?.status === 'located' ? deviceResult.coordinates : null
 
   const placeName = useQuery({
     queryKey: [
@@ -96,14 +106,23 @@ export function useWeatherLocation(): WeatherLocationControls {
     setSavedCity(normalized)
   }, [])
 
-  const locateDevice = useCallback(() => {
-    clearSavedCity()
-    clearCachedCoordinates()
-    setSavedCity(null)
-    // Drop any previous reading so the strip shows "locating" and the query
-    // runs again (immediately if already active, else once re-enabled above).
-    void queryClient.resetQueries({ queryKey: devicePositionQuery.queryKey })
-  }, [queryClient])
+  const locateDevice = useCallback(async (): Promise<DevicePositionResult> => {
+    // Resolve the position FIRST: the working state (a saved city and its
+    // forecast) is only replaced once we know the device location works.
+    const result = await requestDevicePosition()
+
+    if (result.status === 'located') {
+      // Seed the query before re-enabling it, so it uses this fresh reading
+      // instead of asking the device a second time.
+      queryClient.setQueryData(devicePositionQuery.queryKey, result)
+      clearSavedCity()
+      setSavedCity(null)
+    } else if (savedCity === null) {
+      // Already on the "choose a city" fallback: just refresh its reason.
+      queryClient.setQueryData(devicePositionQuery.queryKey, result)
+    }
+    return result
+  }, [queryClient, savedCity])
 
   let location: WeatherLocation
   if (savedCity) {
@@ -114,14 +133,14 @@ export function useWeatherLocation(): WeatherLocationControls {
       source: 'saved-city',
       placeName: savedCity.name,
     }
-  } else if (devicePosition.data === undefined) {
+  } else if (deviceResult === undefined) {
     location = { status: 'locating' }
-  } else if (deviceCoordinates === null) {
-    location = { status: 'needs-city' }
+  } else if (deviceResult.status !== 'located') {
+    location = { status: 'needs-city', reason: deviceResult.status }
   } else {
     location = {
       status: 'ready',
-      coordinates: deviceCoordinates,
+      coordinates: deviceResult.coordinates,
       source: 'device',
       placeName: placeName.data ?? null,
     }

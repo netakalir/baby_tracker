@@ -1,11 +1,18 @@
 import { Button } from '../../components/ui/Button'
 import type { CurrentWeather } from './api'
 import { CitySearch } from './CitySearch'
+import type { DevicePositionFailure } from './devicePosition'
 import { dressingAdviceFor } from './dressingAdvice'
 import type { SavedCity } from './savedCity'
 import { formatDegrees } from './formatDegrees'
 
 export type WeatherPanelMode = 'details' | 'search'
+
+/** Quiet explanations for why the device location could not be used. */
+const LOCATION_FAILURE_NOTES: Record<DevicePositionFailure, string> = {
+  denied: 'הגישה למיקום חסומה בדפדפן. אפשר לאפשר אותה בהגדרות האתר, או לבחור עיר.',
+  unavailable: 'לא הצלחנו לאתר מיקום. אפשר לבחור עיר.',
+}
 
 interface WeatherPanelProps {
   id: string
@@ -14,6 +21,10 @@ interface WeatherPanelProps {
   weather: CurrentWeather | null
   /** Whether "use my location" is worth offering (i.e. we're not already on it). */
   canUseDeviceLocation: boolean
+  /** True while a "use my location" request is in flight. */
+  isLocatingDevice: boolean
+  /** Why the device location is unavailable, when known - shown as a quiet note. */
+  locationFailure: DevicePositionFailure | null
   onSearchCity: () => void
   onChooseCity: (city: SavedCity) => void
   onUseDeviceLocation: () => void
@@ -30,6 +41,8 @@ export function WeatherPanel({
   mode,
   weather,
   canUseDeviceLocation,
+  isLocatingDevice,
+  locationFailure,
   onSearchCity,
   onChooseCity,
   onUseDeviceLocation,
@@ -63,9 +76,24 @@ export function WeatherPanel({
         </>
       )}
 
+      {/* Always mounted (visually hidden while empty) so a new note is announced. */}
+      <p
+        aria-live="polite"
+        className={locationFailure ? 'text-xs text-neutral-600' : 'sr-only'}
+      >
+        {locationFailure ? LOCATION_FAILURE_NOTES[locationFailure] : ''}
+      </p>
+
       {canUseDeviceLocation && (
-        <Button type="button" variant="ghost" onClick={onUseDeviceLocation}>
-          השתמש במיקום שלי
+        // Not `isLoading`: that disables the button, and disabling the focused
+        // control would drop focus to <body>. Repeat taps are ignored upstream.
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onUseDeviceLocation}
+          aria-busy={isLocatingDevice || undefined}
+        >
+          {isLocatingDevice ? 'מאתר מיקום…' : 'השתמש במיקום שלי'}
         </Button>
       )}
     </div>

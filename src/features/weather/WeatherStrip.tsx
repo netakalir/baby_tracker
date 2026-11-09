@@ -1,6 +1,7 @@
 import { memo, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { dressingAdviceFor } from './dressingAdvice'
 import { formatDegrees } from './formatDegrees'
+import type { DevicePositionFailure } from './devicePosition'
 import type { SavedCity } from './savedCity'
 import { useWeather } from './useWeather'
 import { useWeatherLocation } from './useWeatherLocation'
@@ -76,6 +77,9 @@ export const WeatherStrip = memo(function WeatherStrip() {
 
   const [isOpen, setIsOpen] = useState(false)
   const [mode, setMode] = useState<WeatherPanelMode>('details')
+  const [isLocatingDevice, setIsLocatingDevice] = useState(false)
+  /** The outcome of the last "use my location" tap, if it failed. */
+  const [tapFailure, setTapFailure] = useState<DevicePositionFailure | null>(null)
 
   const needsCity = location.status === 'needs-city'
   // With no location at all, the only useful thing the panel can offer is search.
@@ -98,6 +102,7 @@ export const WeatherStrip = memo(function WeatherStrip() {
     stripButtonRef.current?.focus()
     setIsOpen(false)
     setMode('details')
+    setTapFailure(null)
   }
 
   const togglePanel = (): void => {
@@ -105,6 +110,7 @@ export const WeatherStrip = memo(function WeatherStrip() {
     if (isLoading) return
     setIsOpen((open) => !open)
     setMode('details')
+    setTapFailure(null)
   }
 
   const handleChooseCity = (city: SavedCity): void => {
@@ -112,10 +118,20 @@ export const WeatherStrip = memo(function WeatherStrip() {
     closePanel()
   }
 
-  const handleUseDeviceLocation = (): void => {
-    locateDevice()
-    closePanel()
+  const handleUseDeviceLocation = async (): Promise<void> => {
+    if (isLocatingDevice) return
+    setTapFailure(null)
+    setIsLocatingDevice(true)
+    const result = await locateDevice()
+    setIsLocatingDevice(false)
+    // Success switches the strip to the device location; a failure keeps the
+    // panel open, with everything unchanged, and explains why.
+    if (result.status === 'located') closePanel()
+    else setTapFailure(result.status)
   }
+
+  // An explicit tap's outcome wins; otherwise a first-load fallback carries its reason.
+  const locationFailure = tapFailure ?? (needsCity ? location.reason : null)
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
     if (event.key === 'Escape' && isOpen) closePanel()
@@ -184,9 +200,11 @@ export const WeatherStrip = memo(function WeatherStrip() {
           mode={panelMode}
           weather={weather}
           canUseDeviceLocation={location.status !== 'ready' || location.source !== 'device'}
+          isLocatingDevice={isLocatingDevice}
+          locationFailure={locationFailure}
           onSearchCity={() => setMode('search')}
           onChooseCity={handleChooseCity}
-          onUseDeviceLocation={handleUseDeviceLocation}
+          onUseDeviceLocation={() => void handleUseDeviceLocation()}
         />
       )}
     </section>

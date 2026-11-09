@@ -52,12 +52,3 @@ export function writeCachedCoordinates(coordinates: Coordinates, now: number = D
     // Storage unavailable - we'll just ask the device again next time.
   }
 }
-
-/** Drops the cached position. No-op when storage is unavailable. */
-export function clearCachedCoordinates(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEY)
-  } catch {
-    // Storage unavailable - nothing persisted to clear.
-  }
-}

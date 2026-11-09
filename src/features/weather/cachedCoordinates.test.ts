@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryStorage, createThrowingStorage } from '../../test/memoryStorage'
 import {
   CACHED_COORDINATES_TTL_MS,
-  clearCachedCoordinates,
   readCachedCoordinates,
   writeCachedCoordinates,
 } from './cachedCoordinates'
@@ -58,12 +57,6 @@ describe('cachedCoordinates', () => {
     expect(readCachedCoordinates()).toBeNull()
   })
 
-  it('clears the cache', () => {
-    writeCachedCoordinates({ latitude: 32.2, longitude: 34.9 })
-    clearCachedCoordinates()
-    expect(readCachedCoordinates()).toBeNull()
-  })
-
   it.each([
     ['malformed JSON', '{oops'],
     ['a missing timestamp', JSON.stringify({ latitude: 32.2, longitude: 34.9 })],
@@ -78,6 +71,5 @@ describe('cachedCoordinates', () => {
     vi.stubGlobal('localStorage', createThrowingStorage())
     expect(readCachedCoordinates()).toBeNull()
     expect(() => writeCachedCoordinates({ latitude: 32.2, longitude: 34.9 })).not.toThrow()
-    expect(() => clearCachedCoordinates()).not.toThrow()
   })
 })
