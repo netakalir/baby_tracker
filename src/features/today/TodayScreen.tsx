@@ -4,6 +4,7 @@ import { Banner } from '../../components/ui/Banner'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
 import { useOnboardingStatus } from '../onboarding/useOnboardingStatus'
+import { WeatherStrip } from '../weather/WeatherStrip'
 import { isRunningTimerEvent } from './api'
 import { ClockLegend } from './ClockLegend'
 import { DayClock } from './DayClock'
@@ -117,7 +118,8 @@ interface TodayContentProps {
 }
 
 /**
- * The live "Today" view for a single child: header, the 24-hour clock (hero)
+ * The live "Today" view for a single child: header, the weather/dressing strip
+ * (live view only - never on a historical day), the 24-hour clock (hero)
  * fed by the child's events, a color legend, the estimate rows, and the sticky
  * quick-log bar. Split out so `useTodayEvents` only mounts once we have a child.
  */
@@ -142,6 +144,10 @@ function TodayContent({ childId, childName, dayStart, onOpenWeek, onOpenSettings
   return (
     <>
       <TodayHeader childName={childName} onOpenWeek={onOpenWeek} onOpenSettings={onOpenSettings} />
+
+      <div className="mt-3">
+        <WeatherStrip />
+      </div>
 
       {isError && (
         <div className="mt-4">
