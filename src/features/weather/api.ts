@@ -90,6 +90,8 @@ export const forecastResponseSchema = z.object({
     temperature_2m: z.number(),
     apparent_temperature: z.number(),
     weather_code: z.number().int(),
+    /** 1 between local sunrise and sunset, 0 at night. */
+    is_day: z.union([z.literal(0), z.literal(1)]),
   }),
 })
 
@@ -100,6 +102,8 @@ export interface CurrentWeather {
   apparentTemperature: number
   /** WMO weather interpretation code. */
   weatherCode: number
+  /** False at night (local sunset to sunrise) - drives the night icon variants. */
+  isDay: boolean
 }
 
 /** Parses an Open-Meteo forecast body into {@link CurrentWeather}, or throws a schema error. */
@@ -113,6 +117,7 @@ export function parseForecastResponse(body: unknown): CurrentWeather {
     temperature: current.temperature_2m,
     apparentTemperature: current.apparent_temperature,
     weatherCode: current.weather_code,
+    isDay: current.is_day === 1,
   }
 }
 
@@ -126,7 +131,7 @@ export async function fetchCurrentWeather(
   url.search = new URLSearchParams({
     latitude: String(latitude),
     longitude: String(longitude),
-    current: 'temperature_2m,apparent_temperature,weather_code',
+    current: 'temperature_2m,apparent_temperature,weather_code,is_day',
     timezone: 'auto',
   }).toString()
 

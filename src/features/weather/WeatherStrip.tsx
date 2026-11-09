@@ -159,7 +159,7 @@ export const WeatherStrip = memo(function WeatherStrip() {
     content = (
       <>
         <WeatherIcon
-          kind={weatherIconKind(weather.weatherCode)}
+          kind={weatherIconKind(weather.weatherCode, weather.isDay)}
           className="h-5 w-5 shrink-0 text-neutral-600"
         />
         <span dir="ltr" className="shrink-0 font-semibold tabular-nums text-neutral-900">

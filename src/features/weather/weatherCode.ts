@@ -6,7 +6,15 @@
  * Reference: https://open-meteo.com/en/docs (WMO Weather interpretation codes).
  */
 
-export type WeatherIconKind = 'clear' | 'partly-cloudy' | 'cloudy' | 'rain' | 'storm' | 'other'
+export type WeatherIconKind =
+  | 'clear'
+  | 'clear-night'
+  | 'partly-cloudy'
+  | 'partly-cloudy-night'
+  | 'cloudy'
+  | 'rain'
+  | 'storm'
+  | 'other'
 
 const CLEAR_CODES: ReadonlySet<number> = new Set([0])
 const PARTLY_CLOUDY_CODES: ReadonlySet<number> = new Set([1, 2])
@@ -16,10 +24,14 @@ const RAIN_CODES: ReadonlySet<number> = new Set([51, 53, 55, 56, 57, 61, 63, 65,
 /** Thunderstorm, with or without hail. */
 const STORM_CODES: ReadonlySet<number> = new Set([95, 96, 99])
 
-/** Resolves the icon for a WMO code; fog, snow and unknown codes fall back to `other`. */
-export function weatherIconKind(code: number): WeatherIconKind {
-  if (CLEAR_CODES.has(code)) return 'clear'
-  if (PARTLY_CLOUDY_CODES.has(code)) return 'partly-cloudy'
+/**
+ * Resolves the icon for a WMO code; fog, snow and unknown codes fall back to
+ * `other`. At night (`isDay` false) clear and partly-cloudy skies get a moon
+ * instead of a sun; the other icons have no sun in them, so they don't change.
+ */
+export function weatherIconKind(code: number, isDay: boolean): WeatherIconKind {
+  if (CLEAR_CODES.has(code)) return isDay ? 'clear' : 'clear-night'
+  if (PARTLY_CLOUDY_CODES.has(code)) return isDay ? 'partly-cloudy' : 'partly-cloudy-night'
   if (CLOUDY_CODES.has(code)) return 'cloudy'
   if (RAIN_CODES.has(code)) return 'rain'
   if (STORM_CODES.has(code)) return 'storm'
@@ -29,7 +41,9 @@ export function weatherIconKind(code: number): WeatherIconKind {
 /** Accessible Hebrew label per icon kind. */
 export const WEATHER_ICON_LABELS: Record<WeatherIconKind, string> = {
   clear: 'בהיר',
+  'clear-night': 'לילה בהיר',
   'partly-cloudy': 'מעונן חלקית',
+  'partly-cloudy-night': 'מעונן חלקית',
   cloudy: 'מעונן',
   rain: 'גשם',
   storm: 'סופת רעמים',

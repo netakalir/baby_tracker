@@ -29,6 +29,8 @@ interface WeatherMockOptions {
   temperature?: number
   apparentTemperature?: number
   weatherCode?: number
+  /** Open-Meteo `is_day` (default 1 = daytime). */
+  isDay?: 0 | 1
   /** Reverse-geocode city name (default 'רעננה'). */
   placeName?: string
 }
@@ -61,6 +63,7 @@ async function mockWeatherApis(page: Page, options: WeatherMockOptions = {}): Pr
         temperature_2m: options.temperature ?? 18.4,
         apparent_temperature: options.apparentTemperature ?? 19.6,
         weather_code: options.weatherCode ?? 0,
+        is_day: options.isDay ?? 1,
       },
     })
   })
@@ -183,6 +186,8 @@ test.describe('Today screen - weather dressing strip', () => {
     // The strip itself is the region's first button (the panel adds more once open).
     const stripButton = strip.getByRole('button').first()
     await expect(stripButton).toContainText('18°')
+    // Daytime clear sky (is_day 1, code 0) → the sun icon.
+    await expect(strip.getByRole('img', { name: 'בהיר' })).toBeVisible()
     await expect(stripButton).toContainText('בגד גוף ארוך + שמיכה דקה')
     await expect(stripButton).toContainText('רעננה')
 
@@ -207,7 +212,13 @@ test.describe('Today screen - weather dressing strip', () => {
     const user = await factory.createUser()
     await factory.seedFamilyWithChild(user, { childName: 'יואב' })
     await denyGeolocation(page)
-    const requests = await mockWeatherApis(page, { temperature: 24, apparentTemperature: 24 })
+    // A clear night (is_day 0) - the strip should show the moon, not the sun.
+    const requests = await mockWeatherApis(page, {
+      temperature: 24,
+      apparentTemperature: 24,
+      weatherCode: 0,
+      isDay: 0,
+    })
 
     await signIn(page, user)
     await expect(page).toHaveURL(/\/today$/)
@@ -225,6 +236,7 @@ test.describe('Today screen - weather dressing strip', () => {
     await expect(stripButton).toBeFocused()
     await expect(stripButton).toContainText('24°')
     await expect(stripButton).toContainText('בגד גוף קצר + מכנס דק')
+    await expect(strip.getByRole('img', { name: 'לילה בהיר' })).toBeVisible()
     await expect(stripButton).toContainText('רעננה')
     expect(requests.citySearch.at(-1)?.searchParams.get('name')).toBe('רעננה')
     // A chosen city is resolved by name, never reverse-geocoded.
