@@ -13,6 +13,8 @@ import { signIn } from '../support/pageActions'
  */
 
 const STRIP_REGION = 'מזג אוויר והמלצת לבוש'
+const SAVED_CITY_KEY = 'baby-tracker:weather:saved-city'
+const CACHED_COORDINATES_KEY = 'baby-tracker:weather:device-coordinates'
 const FORECAST_URL = /^https:\/\/api\.open-meteo\.com\/v1\/forecast\?/
 const CITY_SEARCH_URL = /^https:\/\/geocoding-api\.open-meteo\.com\/v1\/search\?/
 const REVERSE_GEOCODE_URL = /^https:\/\/api\.bigdatacloud\.net\/data\/reverse-geocode-client\?/
@@ -162,6 +164,8 @@ test.describe('Today screen - weather dressing strip', () => {
     await strip.getByRole('button', { name: /רעננה.*מחוז המרכז/ }).click()
 
     const stripButton = strip.getByRole('button').first()
+    // Focus returns to the strip (not <body>) once the panel closes.
+    await expect(stripButton).toBeFocused()
     await expect(stripButton).toContainText('24°')
     await expect(stripButton).toContainText('בגד גוף קצר + מכנס דק')
     await expect(stripButton).toContainText('רעננה')
@@ -176,6 +180,67 @@ test.describe('Today screen - weather dressing strip', () => {
     const lastForecast = requests.forecast.at(-1)
     expect(lastForecast?.searchParams.get('latitude')).toBe('32.2')
     expect(lastForecast?.searchParams.get('longitude')).toBe('34.9')
+  })
+
+  test('"use my location" drops the saved city and cached position and locates again', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'תמר' })
+    await page.context().grantPermissions(['geolocation'])
+    await page.context().setGeolocation(DEVICE_POSITION)
+    const requests = await mockWeatherApis(page)
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+    const strip = page.getByRole('region', { name: STRIP_REGION })
+    const stripButton = strip.getByRole('button').first()
+    await expect(stripButton).toContainText('רעננה')
+
+    // Seed a saved city (Haifa) and a *different*, still-fresh cached position
+    // (Jerusalem), then reload: the saved city wins.
+    await page.evaluate(
+      ([savedCityKey, cachedKey]) => {
+        localStorage.setItem(
+          savedCityKey,
+          JSON.stringify({ name: 'חיפה', latitude: 32.8, longitude: 35 }),
+        )
+        localStorage.setItem(
+          cachedKey,
+          JSON.stringify({ latitude: 31.8, longitude: 35.2, savedAt: Date.now() }),
+        )
+      },
+      [SAVED_CITY_KEY, CACHED_COORDINATES_KEY] as const,
+    )
+    await page.reload()
+    await expect(stripButton).toContainText('חיפה')
+    expect(requests.forecast.at(-1)?.searchParams.get('latitude')).toBe('32.8')
+
+    const forecastsBefore = requests.forecast.length
+    await stripButton.click()
+    await strip.getByRole('button', { name: 'השתמש במיקום שלי' }).click()
+    await expect(stripButton).toBeFocused()
+
+    // Back on the device position: the cached Jerusalem fix was discarded and
+    // geolocation was asked again (Raanana, rounded), not the stale cache.
+    await expect(stripButton).toContainText('רעננה')
+    const newForecasts = requests.forecast.slice(forecastsBefore)
+    expect(newForecasts.length).toBeGreaterThan(0)
+    for (const url of newForecasts) {
+      expect(url.searchParams.get('latitude')).toBe('32.2')
+      expect(url.searchParams.get('longitude')).toBe('34.9')
+    }
+
+    const stored = await page.evaluate(
+      ([savedCityKey, cachedKey]) => ({
+        savedCity: localStorage.getItem(savedCityKey),
+        cached: localStorage.getItem(cachedKey),
+      }),
+      [SAVED_CITY_KEY, CACHED_COORDINATES_KEY] as const,
+    )
+    expect(stored.savedCity).toBeNull()
+    expect(JSON.parse(stored.cached ?? 'null')).toMatchObject({ latitude: 32.2, longitude: 34.9 })
   })
 
   test('a weather API failure shows a quiet one-line fallback, not an error banner', async ({
