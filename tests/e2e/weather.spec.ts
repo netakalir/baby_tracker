@@ -134,9 +134,17 @@ interface DeferredGeolocationWindow {
  * and `getCurrentPosition` parks its success callback until the test calls
  * `window.resolveDeferredGeolocation(lat, lon)` - like a parent who leaves the
  * prompt open, or a device still waiting for a fix.
+ *
+ * With `failFirstAttempt`, the very first request (the automatic one on load)
+ * fails at once with POSITION_UNAVAILABLE instead, so the strip starts on the
+ * "choose a city" fallback; later requests are deferred as above.
  */
-async function deferGeolocation(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+async function deferGeolocation(
+  page: Page,
+  { failFirstAttempt = false }: { failFirstAttempt?: boolean } = {},
+): Promise<void> {
+  await page.addInitScript((failFirst: boolean) => {
+    let attempts = 0
     const originalQuery = Permissions.prototype.query
     Object.defineProperty(Permissions.prototype, 'query', {
       configurable: true,
@@ -149,13 +157,24 @@ async function deferGeolocation(page: Page): Promise<void> {
     })
     Object.defineProperty(Geolocation.prototype, 'getCurrentPosition', {
       configurable: true,
-      value: (onSuccess: PositionCallback) => {
+      value: (onSuccess: PositionCallback, onError?: PositionErrorCallback | null) => {
+        attempts += 1
+        if (failFirst && attempts === 1) {
+          onError?.({
+            code: 2,
+            message: 'Position unavailable',
+            PERMISSION_DENIED: 1,
+            POSITION_UNAVAILABLE: 2,
+            TIMEOUT: 3,
+          })
+          return
+        }
         const hooks = window as DeferredGeolocationWindow
         hooks.resolveDeferredGeolocation = (latitude, longitude) =>
           onSuccess({ coords: { latitude, longitude }, timestamp: Date.now() } as GeolocationPosition)
       },
     })
-  })
+  }, failFirstAttempt)
 }
 
 /** The device-local calendar date (`YYYY-MM-DD`) `daysAgo` days before now. */
@@ -415,6 +434,61 @@ test.describe('Today screen - weather dressing strip', () => {
     expect(stored.cached).toBeNull()
     await expect(stripButton).toContainText('רעננה')
     await expect(stripButton).toBeFocused()
+  })
+
+  test('typing a city search while "use my location" is pending gives up on the location', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'ליה' })
+    await deferGeolocation(page, { failFirstAttempt: true })
+    await mockWeatherApis(page)
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    // The automatic lookup failed, so the strip asks for a city.
+    const strip = page.getByRole('region', { name: STRIP_REGION })
+    const stripButton = strip.getByRole('button').first()
+    await stripButton.click()
+    const searchInput = strip.getByLabel('חיפוש עיר')
+    await expect(searchInput).toBeVisible()
+
+    // Tap "use my location" - this time the request hangs.
+    await strip.getByRole('button', { name: 'השתמש במיקום שלי' }).click()
+    await expect(strip.getByRole('button', { name: 'מאתר מיקום…' })).toBeVisible()
+    await expect
+      .poll(() =>
+        page.evaluate(() => typeof (window as DeferredGeolocationWindow).resolveDeferredGeolocation),
+      )
+      .toBe('function')
+
+    // The parent starts typing a city instead - that abandons the location request.
+    await searchInput.fill('רענ')
+    await expect(searchInput).toBeFocused()
+    await expect(strip.getByRole('button', { name: 'השתמש במיקום שלי' })).toBeVisible()
+
+    // The slow geolocation now succeeds...
+    await page.evaluate(() =>
+      (window as DeferredGeolocationWindow).resolveDeferredGeolocation?.(31.7683, 35.2137),
+    )
+
+    // ...and is ignored: nothing stored, the panel stays open mid-typing, and
+    // focus stays in the search field.
+    const stored = await page.evaluate(
+      ([savedCityKey, cachedKey]) => ({
+        savedCity: localStorage.getItem(savedCityKey),
+        cached: localStorage.getItem(cachedKey),
+      }),
+      [SAVED_CITY_KEY, CACHED_COORDINATES_KEY] as const,
+    )
+    expect(stored).toEqual({ savedCity: null, cached: null })
+    await expect(searchInput).toBeVisible()
+    await expect(searchInput).toBeFocused()
+    await expect(searchInput).toHaveValue('רענ')
+    await expect(stripButton).toHaveAttribute('aria-expanded', 'true')
+    await expect(stripButton).toContainText('בחרו עיר')
   })
 
   test('a weather API failure shows a quiet one-line fallback, not an error banner', async ({
