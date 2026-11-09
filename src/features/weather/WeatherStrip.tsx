@@ -117,6 +117,13 @@ export const WeatherStrip = memo(function WeatherStrip() {
     setTapFailure(null)
   }
 
+  // Switching to the city search means giving up on "use my location": a late
+  // success must not close the panel (and steal focus) mid-typing.
+  const handleSearchCity = (): void => {
+    cancelLocateDevice()
+    setMode('search')
+  }
+
   const handleChooseCity = (city: SavedCity): void => {
     chooseCity(city)
     closePanel()
@@ -206,7 +213,8 @@ export const WeatherStrip = memo(function WeatherStrip() {
           canUseDeviceLocation={location.status !== 'ready' || location.source !== 'device'}
           isLocatingDevice={isLocatingDevice}
           locationFailure={locationFailure}
-          onSearchCity={() => setMode('search')}
+          onSearchCity={handleSearchCity}
+          onSearchInput={cancelLocateDevice}
           onChooseCity={handleChooseCity}
           onUseDeviceLocation={() => void handleUseDeviceLocation()}
         />

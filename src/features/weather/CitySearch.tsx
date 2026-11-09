@@ -7,6 +7,8 @@ import { useCitySearch } from './useCitySearch'
 
 interface CitySearchProps {
   onChoose: (city: SavedCity) => void
+  /** Called on every edit of the search term. */
+  onInput: () => void
 }
 
 /**
@@ -14,7 +16,7 @@ interface CitySearchProps {
  * debounced lookup (see `useCitySearch`) and a short list of matches. Picking
  * one hands it to `onChoose`, which saves it on this device.
  */
-export function CitySearch({ onChoose }: CitySearchProps) {
+export function CitySearch({ onChoose, onInput }: CitySearchProps) {
   const inputId = useId()
   const statusId = useId()
   const [term, setTerm] = useState('')
@@ -36,7 +38,10 @@ export function CitySearch({ onChoose }: CitySearchProps) {
         id={inputId}
         type="search"
         value={term}
-        onChange={(event) => setTerm(event.target.value)}
+        onChange={(event) => {
+          setTerm(event.target.value)
+          onInput()
+        }}
         placeholder="לדוגמה: רעננה"
         autoComplete="off"
         enterKeyHint="search"

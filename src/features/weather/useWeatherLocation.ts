@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchPlaceName, isExpectedWeatherOutage, isRetryableWeatherError } from './api'
 import { writeCachedCoordinates } from './cachedCoordinates'
@@ -9,7 +9,7 @@ import {
   type DevicePositionFailure,
   type DevicePositionResult,
 } from './devicePosition'
-import { createLatestRequestGate } from './latestRequestGate'
+import { createDeviceLocator } from './deviceLocator'
 import {
   clearSavedCity,
   normalizeSavedCity,
@@ -86,8 +86,12 @@ export function useWeatherLocation(): WeatherLocationControls {
   const queryClient = useQueryClient()
   const [savedCity, setSavedCity] = useState<SavedCity | null>(readSavedCity)
   const [isLocatingDevice, setIsLocatingDevice] = useState(false)
-  // Stable for the component's lifetime; tells a late locate result it is stale.
-  const [locateGate] = useState(createLatestRequestGate)
+  // Stable for the component's lifetime; decides whether a late locate result still applies.
+  const [locator] = useState(createDeviceLocator)
+
+  // Leaving the screen abandons a pending locate, exactly like closing the
+  // panel does - a late success must not clear a saved city after we've gone.
+  useEffect(() => () => locator.cancel(), [locator])
 
   const devicePosition = useQuery({ ...devicePositionQuery, enabled: savedCity === null })
   const deviceResult = savedCity === null ? devicePosition.data : undefined
@@ -112,9 +116,9 @@ export function useWeatherLocation(): WeatherLocationControls {
   })
 
   const cancelLocateDevice = useCallback(() => {
-    locateGate.invalidate()
+    locator.cancel()
     setIsLocatingDevice(false)
-  }, [locateGate])
+  }, [locator])
 
   const chooseCity = useCallback((city: SavedCity) => {
     // An explicit choice wins over any still-pending "use my location".
@@ -124,32 +128,32 @@ export function useWeatherLocation(): WeatherLocationControls {
     setSavedCity(normalized)
   }, [cancelLocateDevice])
 
-  const locateDevice = useCallback(async (): Promise<DevicePositionResult | null> => {
-    const token = locateGate.begin()
-    setIsLocatingDevice(true)
-
-    // Resolve the position FIRST: the working state (a saved city and its
-    // forecast) is only replaced once we know the device location works.
-    const result = await requestDevicePosition()
-
-    // Superseded while waiting (a city was chosen, the panel closed, or a newer
-    // tap): ignore the result entirely - no cache write, no state change.
-    if (!locateGate.isCurrent(token)) return null
-    setIsLocatingDevice(false)
-
-    if (result.status === 'located') {
-      writeCachedCoordinates(result.coordinates)
-      // Seed the query before re-enabling it, so it uses this fresh reading
-      // instead of asking the device a second time.
-      queryClient.setQueryData(devicePositionQuery.queryKey, result)
-      clearSavedCity()
-      setSavedCity(null)
-    } else if (savedCity === null) {
-      // Already on the "choose a city" fallback: just refresh its reason.
-      queryClient.setQueryData(devicePositionQuery.queryKey, result)
-    }
-    return result
-  }, [queryClient, savedCity, locateGate])
+  const locateDevice = useCallback(
+    (): Promise<DevicePositionResult | null> =>
+      // Resolve the position FIRST: the working state (a saved city and its
+      // forecast) is only replaced once we know the device location works.
+      // `apply` runs only for a current attempt - a superseded one (city
+      // chosen, search started, panel closed, screen left, newer tap) changes
+      // nothing at all: no cache write, no query update, no saved-city change.
+      locator.locate({
+        request: requestDevicePosition,
+        setPending: setIsLocatingDevice,
+        apply: (result) => {
+          if (result.status === 'located') {
+            writeCachedCoordinates(result.coordinates)
+            // Seed the query before re-enabling it, so it uses this fresh
+            // reading instead of asking the device a second time.
+            queryClient.setQueryData(devicePositionQuery.queryKey, result)
+            clearSavedCity()
+            setSavedCity(null)
+          } else if (savedCity === null) {
+            // Already on the "choose a city" fallback: just refresh its reason.
+            queryClient.setQueryData(devicePositionQuery.queryKey, result)
+          }
+        },
+      }),
+    [locator, queryClient, savedCity],
+  )
 
   let location: WeatherLocation
   if (savedCity) {

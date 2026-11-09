@@ -26,6 +26,8 @@ interface WeatherPanelProps {
   /** Why the device location is unavailable, when known - shown as a quiet note. */
   locationFailure: DevicePositionFailure | null
   onSearchCity: () => void
+  /** Called as the parent types in the city search (they've given up on location). */
+  onSearchInput: () => void
   onChooseCity: (city: SavedCity) => void
   onUseDeviceLocation: () => void
 }
@@ -44,6 +46,7 @@ export function WeatherPanel({
   isLocatingDevice,
   locationFailure,
   onSearchCity,
+  onSearchInput,
   onChooseCity,
   onUseDeviceLocation,
 }: WeatherPanelProps) {
@@ -53,7 +56,7 @@ export function WeatherPanel({
       className="mt-2 space-y-3 rounded-lg border border-neutral-200 bg-neutral-0 p-4 shadow-sm"
     >
       {mode === 'search' ? (
-        <CitySearch onChoose={onChooseCity} />
+        <CitySearch onChoose={onChooseCity} onInput={onSearchInput} />
       ) : (
         <>
           {weather ? (
