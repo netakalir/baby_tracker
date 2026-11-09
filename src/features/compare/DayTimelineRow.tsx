@@ -10,6 +10,9 @@ import {
 /** The gentle per-row empty message — a day with nothing logged is not an error. */
 const EMPTY_ROW_TEXT = 'אין אירועים ביום זה'
 
+/** A quiet per-row note when the day failed to load; the banner above explains it. */
+const ERROR_ROW_TEXT = 'לא ניתן להציג יום זה'
+
 /**
  * Minimum visible length of a segment, so an instant (diaper) or a very short
  * feed still reads as a short line at 320px. Kept equal to the `min-w-2.5`
@@ -24,6 +27,8 @@ interface DayTimelineRowProps {
   /** The computed segments + summary, or null while the day has no data yet. */
   day: DayComparison | null
   isLoading: boolean
+  /** True when the day's fetch failed and there is no data to show. */
+  isError: boolean
   /** Opens this day in the Today view (live for today, historical otherwise). */
   onOpen: () => void
 }
@@ -63,14 +68,16 @@ function Segment({ segment }: SegmentProps) {
  * one-line summary that may wrap at 320px but never overflows. The whole row is
  * a tap target that opens the day in the Today view.
  */
-export function DayTimelineRow({ label, day, isLoading, onOpen }: DayTimelineRowProps) {
+export function DayTimelineRow({ label, day, isLoading, isError, onOpen }: DayTimelineRowProps) {
   const summaryText = day
     ? day.hasEvents
       ? formatDaySummary(day)
       : EMPTY_ROW_TEXT
     : isLoading
       ? 'טוען...'
-      : ''
+      : isError
+        ? ERROR_ROW_TEXT
+        : ''
   const accessibleSummary = day?.hasEvents ? describeDaySummary(day) : summaryText
 
   return (

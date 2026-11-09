@@ -7,6 +7,8 @@ export interface CompareDayQuery {
   readonly dateString: string
   readonly events: readonly Event[] | undefined
   readonly isLoading: boolean
+  /** True when this day's fetch failed (the screen-level banner carries the message). */
+  readonly isError: boolean
 }
 
 export interface CompareDaysResult {
@@ -34,6 +36,7 @@ export function useCompareDays(
         dateString: dateStrings[index],
         events: result.data,
         isLoading: result.isLoading,
+        isError: result.isError,
       })),
       error: results.find((result) => result.isError)?.error ?? null,
     }),
