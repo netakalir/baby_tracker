@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Banner } from '../../components/ui/Banner'
+import { Button } from '../../components/ui/Button'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
 import { useOnboardingStatus } from '../onboarding/useOnboardingStatus'
@@ -187,6 +188,7 @@ function WeekContent({ childId, createdAtIso, dayStart, sunday, onWeekChange }: 
  * it survives data reloads and child switches; a back arrow returns to Today.
  */
 export function WeekScreen() {
+  const navigate = useNavigate()
   const { data: onboardingState } = useOnboardingStatus()
   const [sunday, setSunday] = useState<string | null>(null)
 
@@ -202,13 +204,22 @@ export function WeekScreen() {
         <SettingsHeader title="שבוע" backTo="/today" />
 
         {child ? (
-          <WeekContent
-            childId={child.id}
-            createdAtIso={child.created_at}
-            dayStart={child.day_start}
-            sunday={selectedSunday}
-            onWeekChange={setSunday}
-          />
+          <>
+            <WeekContent
+              childId={child.id}
+              createdAtIso={child.created_at}
+              dayStart={child.day_start}
+              sunday={selectedSunday}
+              onWeekChange={setSunday}
+            />
+
+            {/* Entry point to the Day-comparison screen (any recent days, side by side). */}
+            <div className="mt-6">
+              <Button type="button" variant="secondary" onClick={() => navigate('/compare')}>
+                השוואת ימים
+              </Button>
+            </div>
+          </>
         ) : (
           <p className="mt-10 text-center text-sm text-neutral-600">לא נמצא/ה ילד/ה במשפחה</p>
         )}

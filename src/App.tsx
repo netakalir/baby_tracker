@@ -3,6 +3,7 @@ import { AuthPage } from './features/auth/AuthPage'
 import { ForgotPasswordScreen } from './features/auth/ForgotPasswordScreen'
 import { ResetPasswordScreen } from './features/auth/ResetPasswordScreen'
 import { VerifyEmailScreen } from './features/auth/VerifyEmailScreen'
+import { CompareScreen } from './features/compare/CompareScreen'
 import { AddChildScreen } from './features/onboarding/AddChildScreen'
 import { CreateFamilyScreen } from './features/onboarding/CreateFamilyScreen'
 import { CreateOrJoinScreen } from './features/onboarding/CreateOrJoinScreen'
@@ -72,6 +73,9 @@ function App() {
             {/* Week is a pushed screen reached from the Today header, not a
                 bottom-nav tab (the app has no bottom nav yet). */}
             <Route path="/week" element={<WeekScreen />} />
+
+            {/* Day comparison is a pushed screen reached from the Week screen. */}
+            <Route path="/compare" element={<CompareScreen />} />
 
             {/* Settings is a pushed screen reached from the Today header gear,
                 not a bottom-nav tab. Placeholders here are filled by later
