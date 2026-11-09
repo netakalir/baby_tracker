@@ -1,10 +1,16 @@
 import { useCallback, useState } from 'react'
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchPlaceName, isRetryableWeatherError } from './api'
+import { fetchPlaceName, isExpectedWeatherOutage, isRetryableWeatherError } from './api'
 import { clearCachedCoordinates } from './cachedCoordinates'
-import { roundCoordinates, type Coordinates } from './coordinates'
+import type { Coordinates } from './coordinates'
 import { readDevicePosition } from './devicePosition'
-import { clearSavedCity, readSavedCity, writeSavedCity, type SavedCity } from './savedCity'
+import {
+  clearSavedCity,
+  normalizeSavedCity,
+  readSavedCity,
+  writeSavedCity,
+  type SavedCity,
+} from './savedCity'
 
 /** Where the weather strip's location currently stands. */
 export type WeatherLocation =
@@ -81,11 +87,13 @@ export function useWeatherLocation(): WeatherLocationControls {
     staleTime: ONE_DAY_MS,
     gcTime: ONE_DAY_MS,
     retry: (failureCount, error) => failureCount < 1 && isRetryableWeatherError(error),
+    meta: { skipErrorReport: isExpectedWeatherOutage },
   })
 
   const chooseCity = useCallback((city: SavedCity) => {
-    writeSavedCity(city)
-    setSavedCity(city)
+    const normalized = normalizeSavedCity(city)
+    writeSavedCity(normalized)
+    setSavedCity(normalized)
   }, [])
 
   const locateDevice = useCallback(() => {
@@ -101,7 +109,8 @@ export function useWeatherLocation(): WeatherLocationControls {
   if (savedCity) {
     location = {
       status: 'ready',
-      coordinates: roundCoordinates(savedCity),
+      // Already rounded: a saved city is normalized on read and on save.
+      coordinates: { latitude: savedCity.latitude, longitude: savedCity.longitude },
       source: 'saved-city',
       placeName: savedCity.name,
     }

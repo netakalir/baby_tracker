@@ -3,6 +3,7 @@ import {
   WeatherApiError,
   fetchCurrentWeather,
   fetchPlaceName,
+  isExpectedWeatherOutage,
   isRetryableWeatherError,
   parseCitySearchResponse,
   parseForecastResponse,
@@ -203,5 +204,19 @@ describe('isRetryableWeatherError', () => {
     expect(isRetryableWeatherError(new WeatherApiError('http', 'x', 400))).toBe(false)
     expect(isRetryableWeatherError(new WeatherApiError('schema', 'x'))).toBe(false)
     expect(isRetryableWeatherError(new Error('other'))).toBe(false)
+  })
+})
+
+describe('isExpectedWeatherOutage', () => {
+  it('treats network failures and error statuses as expected outages (not reported)', () => {
+    expect(isExpectedWeatherOutage(new WeatherApiError('network', 'x'))).toBe(true)
+    expect(isExpectedWeatherOutage(new WeatherApiError('http', 'x', 503))).toBe(true)
+    expect(isExpectedWeatherOutage(new WeatherApiError('http', 'x', 404))).toBe(true)
+  })
+
+  it('keeps schema mismatches and foreign errors reportable', () => {
+    expect(isExpectedWeatherOutage(new WeatherApiError('schema', 'x'))).toBe(false)
+    expect(isExpectedWeatherOutage(new Error('other'))).toBe(false)
+    expect(isExpectedWeatherOutage('string')).toBe(false)
   })
 })

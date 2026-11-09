@@ -18,10 +18,10 @@ export function CitySearch({ onChoose }: CitySearchProps) {
   const inputId = useId()
   const statusId = useId()
   const [term, setTerm] = useState('')
-  const { results, isActive, isSearching, isError } = useCitySearch(term)
+  const { results, isActive, isSearching, isUnavailable } = useCitySearch(term)
 
   let status: string | null = null
-  if (isError) status = 'החיפוש לא זמין כרגע'
+  if (isUnavailable) status = 'החיפוש לא זמין כרגע'
   else if (isSearching && results.length === 0) status = 'מחפש…'
   else if (isActive && !isSearching && results.length === 0) status = 'לא נמצאו ערים בשם הזה'
 
@@ -46,7 +46,13 @@ export function CitySearch({ onChoose }: CitySearchProps) {
         autoFocus
       />
 
-      <p id={statusId} aria-live="polite" className="mt-2 text-xs text-neutral-600 empty:hidden">
+      {/* Always mounted (only visually hidden while empty), so the first message
+          is announced: a live region inserted together with its text often isn't. */}
+      <p
+        id={statusId}
+        aria-live="polite"
+        className={status ? 'mt-2 text-xs text-neutral-600' : 'sr-only'}
+      >
         {status}
       </p>
 

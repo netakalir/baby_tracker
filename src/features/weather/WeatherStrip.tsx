@@ -1,4 +1,4 @@
-import { memo, useId, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { memo, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { dressingAdviceFor } from './dressingAdvice'
 import { formatDegrees } from './formatDegrees'
 import type { SavedCity } from './savedCity'
@@ -69,6 +69,7 @@ function Separator() {
  */
 export const WeatherStrip = memo(function WeatherStrip() {
   const panelId = useId()
+  const stripButtonRef = useRef<HTMLButtonElement>(null)
   const { location, chooseCity, locateDevice } = useWeatherLocation()
   const coordinates = location.status === 'ready' ? location.coordinates : null
   const weatherQuery = useWeather(coordinates)
@@ -80,51 +81,56 @@ export const WeatherStrip = memo(function WeatherStrip() {
   // With no location at all, the only useful thing the panel can offer is search.
   const panelMode: WeatherPanelMode = needsCity ? 'search' : mode
 
+  const weather = weatherQuery.data ?? null
+  // Offline, the forecast query pauses rather than failing - treat that as
+  // "unavailable" instead of leaving the skeleton up indefinitely.
+  const isOffline = weatherQuery.fetchStatus === 'paused' && !weather
+  const isLoading =
+    location.status === 'locating' ||
+    (location.status === 'ready' && weatherQuery.isPending && !isOffline)
+
+  /**
+   * Closes the panel and puts focus back on the strip button. Focus moves
+   * *before* the panel unmounts, so it never falls back to <body> when the
+   * focused control (a search result, an action, the search field) goes away.
+   */
+  const closePanel = (): void => {
+    stripButtonRef.current?.focus()
+    setIsOpen(false)
+    setMode('details')
+  }
+
   const togglePanel = (): void => {
+    // A loading strip has nothing to show yet; the tap is simply ignored.
+    if (isLoading) return
     setIsOpen((open) => !open)
     setMode('details')
   }
 
   const handleChooseCity = (city: SavedCity): void => {
     chooseCity(city)
-    setIsOpen(false)
-    setMode('details')
+    closePanel()
   }
 
   const handleUseDeviceLocation = (): void => {
     locateDevice()
-    setIsOpen(false)
-    setMode('details')
+    closePanel()
   }
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    if (event.key === 'Escape' && isOpen) {
-      setIsOpen(false)
-      setMode('details')
-    }
+  const handleKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
+    if (event.key === 'Escape' && isOpen) closePanel()
   }
-
-  const isLoading =
-    location.status === 'locating' || (location.status === 'ready' && weatherQuery.isPending)
-
-  if (isLoading) {
-    return (
-      <section aria-label={REGION_LABEL}>
-        {/* Deliberately not `role="status"`: the quick-log toast owns that role
-            on this screen, and a static placeholder needs no live announcement. */}
-        <div className={STRIP_CLASSES} aria-busy="true">
-          <span className="sr-only">טוען מזג אוויר</span>
-          <span aria-hidden="true" className="h-5 w-5 shrink-0 rounded-full bg-neutral-100" />
-          <span aria-hidden="true" className="h-3 w-40 rounded-full bg-neutral-100" />
-        </div>
-      </section>
-    )
-  }
-
-  const weather = weatherQuery.data ?? null
 
   let content: ReactNode
-  if (needsCity) {
+  if (isLoading) {
+    content = (
+      <>
+        <span className="sr-only">טוען מזג אוויר</span>
+        <span aria-hidden="true" className="h-5 w-5 shrink-0 rounded-full bg-neutral-100" />
+        <span aria-hidden="true" className="h-3 w-40 rounded-full bg-neutral-100" />
+      </>
+    )
+  } else if (needsCity) {
     content = <span className="truncate font-medium text-brand-600">בחרו עיר</span>
   } else if (!weather) {
     content = <span className="truncate text-neutral-600">מזג האוויר לא זמין כרגע</span>
@@ -155,18 +161,24 @@ export const WeatherStrip = memo(function WeatherStrip() {
 
   return (
     <section aria-label={REGION_LABEL} onKeyDown={handleKeyDown}>
+      {/* One stable button across every state (loading included), so focus
+          returned to it survives state changes. Loading is conveyed with
+          `aria-busy` - deliberately not `role="status"`, which the quick-log
+          toast owns on this screen. */}
       <button
+        ref={stripButtonRef}
         type="button"
         onClick={togglePanel}
-        aria-expanded={isOpen}
-        aria-controls={panelId}
+        aria-busy={isLoading || undefined}
+        aria-expanded={isOpen && !isLoading}
+        aria-controls={isOpen ? panelId : undefined}
         className={`${STRIP_CLASSES} ${INTERACTIVE_CLASSES}`}
       >
         {content}
-        <Chevron isOpen={isOpen} />
+        {!isLoading && <Chevron isOpen={isOpen} />}
       </button>
 
-      {isOpen && (
+      {isOpen && !isLoading && (
         <WeatherPanel
           id={panelId}
           mode={panelMode}

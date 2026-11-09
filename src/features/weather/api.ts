@@ -44,6 +44,17 @@ export function isRetryableWeatherError(error: unknown): boolean {
 }
 
 /**
+ * True for a failure of the third-party service itself (unreachable, or an
+ * error status) - expected now and then and not actionable by us, so the
+ * weather queries keep it out of Sentry via `meta.skipErrorReport`. A schema
+ * mismatch is NOT an outage: it means the API contract changed under us, so it
+ * stays reported.
+ */
+export function isExpectedWeatherOutage(error: unknown): boolean {
+  return error instanceof WeatherApiError && error.kind !== 'schema'
+}
+
+/**
  * Fetches `url`, checks the status and returns the parsed JSON body (still
  * `unknown`; each caller validates it with its own Zod-backed parser).
  */

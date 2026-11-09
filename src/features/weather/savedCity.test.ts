@@ -21,9 +21,23 @@ describe('savedCity', () => {
     expect(readSavedCity()).toBeNull()
   })
 
-  it('round-trips a saved city', () => {
+  it('round-trips a saved city, normalized to one-decimal coordinates', () => {
     writeSavedCity(RAANANA)
-    expect(readSavedCity()).toEqual(RAANANA)
+    expect(readSavedCity()).toEqual({ name: 'רעננה', latitude: 32.2, longitude: 34.9 })
+  })
+
+  it('stores only rounded coordinates and a trimmed name', () => {
+    writeSavedCity({ ...RAANANA, name: '  רעננה ' })
+    expect(JSON.parse(storage.getItem(STORAGE_KEY) ?? 'null')).toEqual({
+      name: 'רעננה',
+      latitude: 32.2,
+      longitude: 34.9,
+    })
+  })
+
+  it('normalizes a precise value already in storage when reading it', () => {
+    storage.setItem(STORAGE_KEY, JSON.stringify(RAANANA))
+    expect(readSavedCity()).toEqual({ name: 'רעננה', latitude: 32.2, longitude: 34.9 })
   })
 
   it('clears the saved city', () => {

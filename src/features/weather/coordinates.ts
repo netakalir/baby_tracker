@@ -3,8 +3,9 @@ import { z } from 'zod'
 /**
  * A latitude/longitude pair. Throughout the weather feature, coordinates are
  * rounded to one decimal (~11 km) before they are used for anything — a network
- * request, a query key, or local storage — so a precise device position never
- * leaves the function that read it.
+ * request, a query key, or local storage (both the cached device position and
+ * a manually chosen city are stored rounded) — so a precise device position
+ * never leaves the function that read it.
  */
 export interface Coordinates {
   latitude: number

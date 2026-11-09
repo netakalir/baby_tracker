@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchCurrentWeather, isRetryableWeatherError } from './api'
+import { fetchCurrentWeather, isExpectedWeatherOutage, isRetryableWeatherError } from './api'
 import { roundCoordinates, type Coordinates } from './coordinates'
 
 const THIRTY_MINUTES_MS = 30 * 60 * 1000
@@ -30,5 +30,6 @@ export function useWeather(coordinates: Coordinates | null) {
     staleTime: THIRTY_MINUTES_MS,
     gcTime: THIRTY_MINUTES_MS,
     retry: (failureCount, error) => failureCount < 1 && isRetryableWeatherError(error),
+    meta: { skipErrorReport: isExpectedWeatherOutage },
   })
 }

@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { isRetryableWeatherError, searchCities, type CitySearchResult } from './api'
+import {
+  isExpectedWeatherOutage,
+  isRetryableWeatherError,
+  searchCities,
+  type CitySearchResult,
+} from './api'
 
 /** Wait this long after the last keystroke before searching. */
 const SEARCH_DEBOUNCE_MS = 300
@@ -25,7 +30,8 @@ export interface CitySearchState {
   /** True when the (debounced) term is long enough to search. */
   isActive: boolean
   isSearching: boolean
-  isError: boolean
+  /** The search failed, or is paused because the device is offline. */
+  isUnavailable: boolean
 }
 
 /**
@@ -45,12 +51,13 @@ export function useCitySearch(term: string): CitySearchState {
     staleTime: 60 * 60 * 1000,
     placeholderData: keepPreviousData,
     retry: (failureCount, error) => failureCount < 1 && isRetryableWeatherError(error),
+    meta: { skipErrorReport: isExpectedWeatherOutage },
   })
 
   return {
     results: isActive ? (query.data ?? []) : [],
     isActive,
     isSearching: isActive && query.isFetching,
-    isError: isActive && query.isError,
+    isUnavailable: isActive && (query.isError || query.fetchStatus === 'paused'),
   }
 }
