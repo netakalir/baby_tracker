@@ -24,9 +24,21 @@ const headerDateFormatter = new Intl.DateTimeFormat('he-IL', {
   month: 'long',
 })
 
+/**
+ * "22 ביולי" - the compact phone-width date. With three header icons and the
+ * child pill, a phone leaves the date only its ~5rem floor, where the long
+ * form would truncate to a bare weekday fragment; day + month still fits.
+ */
+const compactHeaderDateFormatter = new Intl.DateTimeFormat('he-IL', {
+  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  day: 'numeric',
+  month: 'long',
+})
+
 interface TodayHeaderProps {
   childName: string
   onOpenWeek: () => void
+  onOpenCompare: () => void
   onOpenSettings: () => void
 }
 
@@ -36,22 +48,26 @@ interface TodayHeaderProps {
  * for now it is a static identity). Week-chart, day-comparison and settings
  * icons sit as compact buttons at the edge, pushing those screens.
  *
- * Fits down to 320px: the icons never shrink; the date takes only the space
- * left over (truncating first), and the child name truncates after it, so the
- * header never overflows horizontally.
+ * Fits down to 320px without horizontal overflow: the icons never shrink and
+ * the date keeps a 5rem floor (compact "day month" form below `sm`, ellipsis if
+ * it still doesn't fit), taking any extra space beyond that. The child name is
+ * what gives way first - it truncates, down to just the avatar, at the
+ * narrowest widths.
  */
 const TodayHeader = memo(function TodayHeader({
   childName,
   onOpenWeek,
+  onOpenCompare,
   onOpenSettings,
 }: TodayHeaderProps) {
-  const navigate = useNavigate()
+  const today = new Date()
 
   return (
-    <header className="flex items-center justify-between gap-3">
-      <div className="min-w-0 flex-1">
+    <header className="flex items-center justify-between gap-2 sm:gap-3">
+      <div className="min-w-20 flex-1">
         <p className="truncate text-lg font-semibold text-neutral-900">
-          {headerDateFormatter.format(new Date())}
+          <span className="sm:hidden">{compactHeaderDateFormatter.format(today)}</span>
+          <span className="hidden sm:inline">{headerDateFormatter.format(today)}</span>
         </p>
       </div>
 
@@ -88,7 +104,7 @@ const TodayHeader = memo(function TodayHeader({
 
           <button
             type="button"
-            onClick={() => navigate('/compare')}
+            onClick={onOpenCompare}
             aria-label="השוואת ימים"
             className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-colors duration-fast hover:bg-neutral-100 hover:text-neutral-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
@@ -145,6 +161,7 @@ interface TodayContentProps {
   /** The child's day boundary ('HH:MM', default '00:00'), scoping "today". */
   dayStart: string
   onOpenWeek: () => void
+  onOpenCompare: () => void
   onOpenSettings: () => void
 }
 
@@ -153,7 +170,14 @@ interface TodayContentProps {
  * fed by the child's events, a color legend, the estimate rows, and the sticky
  * quick-log bar. Split out so `useTodayEvents` only mounts once we have a child.
  */
-function TodayContent({ childId, childName, dayStart, onOpenWeek, onOpenSettings }: TodayContentProps) {
+function TodayContent({
+  childId,
+  childName,
+  dayStart,
+  onOpenWeek,
+  onOpenCompare,
+  onOpenSettings,
+}: TodayContentProps) {
   const today = new Date()
   const displayUnit = useDisplayUnit()
   const { data: events, isError, error } = useTodayEvents(childId, dayStart)
@@ -173,7 +197,12 @@ function TodayContent({ childId, childName, dayStart, onOpenWeek, onOpenSettings
 
   return (
     <>
-      <TodayHeader childName={childName} onOpenWeek={onOpenWeek} onOpenSettings={onOpenSettings} />
+      <TodayHeader
+        childName={childName}
+        onOpenWeek={onOpenWeek}
+        onOpenCompare={onOpenCompare}
+        onOpenSettings={onOpenSettings}
+      />
 
       {isError && (
         <div className="mt-4">
@@ -234,6 +263,7 @@ export function TodayScreen() {
               childName={child.name}
               dayStart={child.day_start}
               onOpenWeek={() => navigate('/week')}
+              onOpenCompare={() => navigate('/compare')}
               onOpenSettings={() => navigate('/settings')}
             />
           )
