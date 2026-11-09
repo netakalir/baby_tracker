@@ -184,4 +184,39 @@ test.describe('Day comparison screen', () => {
     )
     expect(pageOverflows).toBe(false)
   })
+
+  test("the other parent's log reaches an open comparison without reloading", async ({
+    page,
+    browser,
+    factory,
+  }) => {
+    // Two parents in the same family (see today-realtime.spec.ts). No clock
+    // pinning here: the realtime socket needs real time to flow.
+    const userA = await factory.createUser()
+    const userB = await factory.createUser()
+    const family = await factory.seedFamilyWithChild(userA, { childName: 'גיל' })
+    await factory.addMember(userB, family.familyId)
+
+    // User B has the comparison open; the child was created today, so the
+    // default selection is just today, still empty.
+    await signIn(page, userB)
+    await openCompare(page)
+    const todayRow = rowsList(page).getByRole('button', { name: /^היום/ })
+    await expect(todayRow).toContainText('אין אירועים ביום זה')
+
+    // User A, on another device, logs a diaper with one tap.
+    const contextA = await browser.newContext()
+    const pageA = await contextA.newPage()
+    try {
+      await signIn(pageA, userA)
+      await expect(pageA).toHaveURL(/\/today$/)
+      await pageA.getByRole('button', { name: 'רישום החתלה' }).click()
+      await expect(pageA.getByRole('status')).toHaveText('נרשם החתלה')
+
+      // Without any reload, B's today row picks up the diaper.
+      await expect(todayRow.getByText('0ד׳ · 0 האכלות · 1 חיתול', { exact: true })).toBeVisible()
+    } finally {
+      await contextA.close()
+    }
+  })
 })
