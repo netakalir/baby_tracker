@@ -31,11 +31,9 @@ function atLocalHour(dateString: string, hour: number): string {
 /** Backdates the child ten days (from `FIXED_NOW`) so several past days are selectable. */
 const CHILD_CREATED_AT = new Date(FIXED_NOW.getTime() - 10 * DAY_MS).toISOString()
 
-/** Opens the Day-comparison screen the way a user does: Today → Week → "השוואת ימים". */
+/** Opens the Day-comparison screen the way a user does: the Today header's compare icon. */
 async function openCompare(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/today$/)
-  await page.getByRole('button', { name: 'שבוע' }).click()
-  await expect(page).toHaveURL(/\/week$/)
   await page.getByRole('button', { name: 'השוואת ימים' }).click()
   await expect(page).toHaveURL(/\/compare$/)
 }
@@ -118,6 +116,19 @@ test.describe('Day comparison screen', () => {
     await expect(page).toHaveURL(new RegExp(`/today\\?date=${threeDaysAgo}$`))
     await expect(page.getByRole('button', { name: 'יום קודם' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'רישום החתלה' })).toBeDisabled()
+  })
+
+  test('the back control returns to Today', async ({ page, factory }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'רז', createdAt: CHILD_CREATED_AT })
+
+    await page.clock.setFixedTime(FIXED_NOW)
+    await signIn(page, user)
+    await openCompare(page)
+
+    await page.getByRole('button', { name: 'חזרה' }).click()
+    await expect(page).toHaveURL(/\/today$/)
+    await expect(page.getByRole('button', { name: 'השוואת ימים' })).toBeVisible()
   })
 
   test('deselecting every day shows the empty prompt instead of rows', async ({ page, factory }) => {

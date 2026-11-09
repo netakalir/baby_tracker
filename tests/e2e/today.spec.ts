@@ -164,6 +164,36 @@ test.describe('Today screen - quick-log menus (dismiss & fit)', () => {
     expect(box!.x + box!.width).toBeLessThanOrEqual(375 + 1)
   })
 
+  test('the header (date, child pill, three icons) fits a 320px screen without overflow', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    // A long name exercises the pill's truncation at the narrowest width.
+    await factory.seedFamilyWithChild(user, { childName: 'אלכסנדרה-מרגריטה' })
+
+    await page.setViewportSize({ width: 320, height: 720 })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    // Every header icon sits fully within the screen, both edges.
+    for (const name of ['שבוע', 'השוואת ימים', 'הגדרות']) {
+      const box = await page.getByRole('button', { name }).boundingBox()
+      expect(box, name).not.toBeNull()
+      expect(box!.x, name).toBeGreaterThanOrEqual(-1)
+      expect(box!.x + box!.width, name).toBeLessThanOrEqual(320 + 1)
+    }
+
+    // The header itself never overflows, and the page never scrolls sideways.
+    const header = page.locator('header').first()
+    expect(await header.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false)
+    const pageOverflows = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    )
+    expect(pageOverflows).toBe(false)
+  })
+
   test('the quick-log bar fits within a very narrow (320px) phone screen', async ({
     page,
     factory,
