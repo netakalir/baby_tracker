@@ -185,8 +185,15 @@ test.describe('Today screen - quick-log menus (dismiss & fit)', () => {
       expect(box!.x + box!.width, name).toBeLessThanOrEqual(320 + 1)
     }
 
-    // The header itself never overflows, and the page never scrolls sideways.
+    // The date keeps a readable floor (it may truncate, never collapse to 0),
+    // and the child pill stays on screen — the long name is what gives way.
     const header = page.locator('header').first()
+    const dateBox = await header.locator('p').first().boundingBox()
+    expect(dateBox).not.toBeNull()
+    expect(dateBox!.width).toBeGreaterThanOrEqual(40)
+    await expect(page.getByRole('heading', { name: 'אלכסנדרה-מרגריטה' })).toBeVisible()
+
+    // The header itself never overflows, and the page never scrolls sideways.
     expect(await header.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false)
     const pageOverflows = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
