@@ -79,7 +79,7 @@ describe('device position', () => {
   })
 
   describe('requestDevicePosition (explicit tap, fresh)', () => {
-    it('ignores a fresh cache and asks the device', async () => {
+    it('ignores a fresh cache, asks the device, and leaves caching to the caller', async () => {
       writeCachedCoordinates({ latitude: 31.8, longitude: 35.2 })
       const getCurrentPosition = stubNavigator({
         geolocation: (onSuccess) => onSuccess({ coords: PRECISE }),
@@ -88,7 +88,8 @@ describe('device position', () => {
 
       await expect(requestDevicePosition()).resolves.toEqual({ status: 'located', coordinates: ROUNDED })
       expect(getCurrentPosition).toHaveBeenCalledTimes(1)
-      expect(readCachedCoordinates()).toEqual(ROUNDED)
+      // Not written here: a superseded tap must be droppable without side effects.
+      expect(readCachedCoordinates()).toEqual({ latitude: 31.8, longitude: 35.2 })
     })
 
     it('reports denied without calling the Geolocation API when permission is denied', async () => {

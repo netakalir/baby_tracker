@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchPlaceName, isExpectedWeatherOutage, isRetryableWeatherError } from './api'
+import { writeCachedCoordinates } from './cachedCoordinates'
 import type { Coordinates } from './coordinates'
 import {
   readDevicePosition,
@@ -8,6 +9,7 @@ import {
   type DevicePositionFailure,
   type DevicePositionResult,
 } from './devicePosition'
+import { createLatestRequestGate } from './latestRequestGate'
 import {
   clearSavedCity,
   normalizeSavedCity,
@@ -33,15 +35,21 @@ export type WeatherLocation =
 
 export interface WeatherLocationControls {
   location: WeatherLocation
-  /** Saves `city` on this device and uses it from now on. */
+  /** Saves `city` on this device and uses it from now on (cancels any pending locate). */
   chooseCity: (city: SavedCity) => void
   /**
    * Asks the device for a fresh position. Only on success does it switch to
    * it (dropping the saved city and refreshing the cached position); on
    * failure the current location is left exactly as it was. Resolves with the
-   * outcome so the caller can explain a failure.
+   * outcome so the caller can explain a failure - or with `null` when the
+   * request was superseded meanwhile (a city was chosen, it was cancelled, or
+   * a newer request started), in which case it changed nothing at all.
    */
-  locateDevice: () => Promise<DevicePositionResult>
+  locateDevice: () => Promise<DevicePositionResult | null>
+  /** Abandons a pending {@link locateDevice}: its late result will be ignored. */
+  cancelLocateDevice: () => void
+  /** True while a {@link locateDevice} request is pending (and not cancelled). */
+  isLocatingDevice: boolean
 }
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
@@ -77,6 +85,9 @@ const devicePositionQuery = queryOptions({
 export function useWeatherLocation(): WeatherLocationControls {
   const queryClient = useQueryClient()
   const [savedCity, setSavedCity] = useState<SavedCity | null>(readSavedCity)
+  const [isLocatingDevice, setIsLocatingDevice] = useState(false)
+  // Stable for the component's lifetime; tells a late locate result it is stale.
+  const [locateGate] = useState(createLatestRequestGate)
 
   const devicePosition = useQuery({ ...devicePositionQuery, enabled: savedCity === null })
   const deviceResult = savedCity === null ? devicePosition.data : undefined
@@ -100,18 +111,34 @@ export function useWeatherLocation(): WeatherLocationControls {
     meta: { skipErrorReport: isExpectedWeatherOutage },
   })
 
+  const cancelLocateDevice = useCallback(() => {
+    locateGate.invalidate()
+    setIsLocatingDevice(false)
+  }, [locateGate])
+
   const chooseCity = useCallback((city: SavedCity) => {
+    // An explicit choice wins over any still-pending "use my location".
+    cancelLocateDevice()
     const normalized = normalizeSavedCity(city)
     writeSavedCity(normalized)
     setSavedCity(normalized)
-  }, [])
+  }, [cancelLocateDevice])
 
-  const locateDevice = useCallback(async (): Promise<DevicePositionResult> => {
+  const locateDevice = useCallback(async (): Promise<DevicePositionResult | null> => {
+    const token = locateGate.begin()
+    setIsLocatingDevice(true)
+
     // Resolve the position FIRST: the working state (a saved city and its
     // forecast) is only replaced once we know the device location works.
     const result = await requestDevicePosition()
 
+    // Superseded while waiting (a city was chosen, the panel closed, or a newer
+    // tap): ignore the result entirely - no cache write, no state change.
+    if (!locateGate.isCurrent(token)) return null
+    setIsLocatingDevice(false)
+
     if (result.status === 'located') {
+      writeCachedCoordinates(result.coordinates)
       // Seed the query before re-enabling it, so it uses this fresh reading
       // instead of asking the device a second time.
       queryClient.setQueryData(devicePositionQuery.queryKey, result)
@@ -122,7 +149,7 @@ export function useWeatherLocation(): WeatherLocationControls {
       queryClient.setQueryData(devicePositionQuery.queryKey, result)
     }
     return result
-  }, [queryClient, savedCity])
+  }, [queryClient, savedCity, locateGate])
 
   let location: WeatherLocation
   if (savedCity) {
@@ -146,5 +173,5 @@ export function useWeatherLocation(): WeatherLocationControls {
     }
   }
 
-  return { location, chooseCity, locateDevice }
+  return { location, chooseCity, locateDevice, cancelLocateDevice, isLocatingDevice }
 }

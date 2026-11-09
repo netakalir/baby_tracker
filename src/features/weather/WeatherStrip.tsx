@@ -71,13 +71,13 @@ function Separator() {
 export const WeatherStrip = memo(function WeatherStrip() {
   const panelId = useId()
   const stripButtonRef = useRef<HTMLButtonElement>(null)
-  const { location, chooseCity, locateDevice } = useWeatherLocation()
+  const { location, chooseCity, locateDevice, cancelLocateDevice, isLocatingDevice } =
+    useWeatherLocation()
   const coordinates = location.status === 'ready' ? location.coordinates : null
   const weatherQuery = useWeather(coordinates)
 
   const [isOpen, setIsOpen] = useState(false)
   const [mode, setMode] = useState<WeatherPanelMode>('details')
-  const [isLocatingDevice, setIsLocatingDevice] = useState(false)
   /** The outcome of the last "use my location" tap, if it failed. */
   const [tapFailure, setTapFailure] = useState<DevicePositionFailure | null>(null)
 
@@ -97,8 +97,11 @@ export const WeatherStrip = memo(function WeatherStrip() {
    * Closes the panel and puts focus back on the strip button. Focus moves
    * *before* the panel unmounts, so it never falls back to <body> when the
    * focused control (a search result, an action, the search field) goes away.
+   * Closing also abandons a pending "use my location", so its late result can
+   * neither switch the location nor pull focus back here.
    */
   const closePanel = (): void => {
+    cancelLocateDevice()
     stripButtonRef.current?.focus()
     setIsOpen(false)
     setMode('details')
@@ -108,6 +111,7 @@ export const WeatherStrip = memo(function WeatherStrip() {
   const togglePanel = (): void => {
     // A loading strip has nothing to show yet; the tap is simply ignored.
     if (isLoading) return
+    cancelLocateDevice()
     setIsOpen((open) => !open)
     setMode('details')
     setTapFailure(null)
@@ -121,9 +125,9 @@ export const WeatherStrip = memo(function WeatherStrip() {
   const handleUseDeviceLocation = async (): Promise<void> => {
     if (isLocatingDevice) return
     setTapFailure(null)
-    setIsLocatingDevice(true)
     const result = await locateDevice()
-    setIsLocatingDevice(false)
+    // Superseded (a city was chosen or the panel closed meanwhile): do nothing.
+    if (result === null) return
     // Success switches the strip to the device location; a failure keeps the
     // panel open, with everything unchanged, and explains why.
     if (result.status === 'located') closePanel()

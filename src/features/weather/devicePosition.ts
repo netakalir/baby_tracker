@@ -75,7 +75,6 @@ function getCurrentDevicePosition(): Promise<DevicePositionResult> {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         })
-        writeCachedCoordinates(rounded)
         settle({ status: 'located', coordinates: rounded })
       },
       (error) => settle({ status: classifyPositionError(error.code) }),
@@ -88,8 +87,11 @@ function getCurrentDevicePosition(): Promise<DevicePositionResult> {
  * Asks the device for a *fresh* position (ignoring the cache) - used when the
  * parent explicitly taps "use my location". The permission state is re-checked
  * on every call, so a block lifted in the site settings is picked up; when it
- * is `denied`, no request is made at all. A success refreshes the cached
- * position; a failure leaves the cache untouched. Never rejects.
+ * is `denied`, no request is made at all. Never rejects.
+ *
+ * It does NOT write the cached position: the caller decides whether the result
+ * still applies (the parent may have picked a city meanwhile) and caches it
+ * only then.
  */
 export async function requestDevicePosition(): Promise<DevicePositionResult> {
   if ((await readGeolocationPermission()) === 'denied') return { status: 'denied' }
@@ -100,12 +102,15 @@ export async function requestDevicePosition(): Promise<DevicePositionResult> {
  * Resolves the device position for an automatic (on-mount) lookup: a fresh
  * cached position (see `cachedCoordinates`) is reused without touching the
  * Geolocation API, so the parent is not re-prompted on every visit; otherwise
- * it behaves like {@link requestDevicePosition}. Never rejects - "no location"
- * is an expected state the strip handles by offering a city search, not a
- * failure to report.
+ * it asks via {@link requestDevicePosition} and caches a success. Never rejects
+ * - "no location" is an expected state the strip handles by offering a city
+ * search, not a failure to report.
  */
-export function readDevicePosition(): Promise<DevicePositionResult> {
+export async function readDevicePosition(): Promise<DevicePositionResult> {
   const cached = readCachedCoordinates()
-  if (cached) return Promise.resolve({ status: 'located', coordinates: cached })
-  return requestDevicePosition()
+  if (cached) return { status: 'located', coordinates: cached }
+
+  const result = await requestDevicePosition()
+  if (result.status === 'located') writeCachedCoordinates(result.coordinates)
+  return result
 }
