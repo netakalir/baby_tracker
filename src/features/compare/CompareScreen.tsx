@@ -9,6 +9,7 @@ import { isRunningTimerEvent } from '../today/api'
 import { ClockLegend } from '../today/ClockLegend'
 import { currentChildDateString } from '../today/todayDate'
 import { useNowTick } from '../today/useNowTick'
+import { useTodayEventsRealtime } from '../today/useTodayEventsRealtime'
 import {
   defaultSelectedDates,
   formatRowLabel,
@@ -57,18 +58,20 @@ function CompareContent({
 
   const { days, error } = useCompareDays(childId, rowDates, dayStart)
 
-  // Tick once a second only while a timer runs today, so its line grows live.
-  const todayEvents = days.find((day) => day.dateString === todayString)?.events
-  const now = useNowTick(todayEvents?.some(isRunningTimerEvent) ?? false)
+  // Keep the rows live across devices: the other parent's logs/stops refetch
+  // every selected day (the hook invalidates the whole child-scoped prefix).
+  useTodayEventsRealtime(childId)
+
+  // Tick once a second only while any selected row holds a running timer, so
+  // its line grows live (and settles at the day's end across a rollover).
+  const hasRunningTimer = days.some((day) => day.events?.some(isRunningTimerEvent) ?? false)
+  const now = useNowTick(hasRunningTimer)
 
   // Cheap pure math over a handful of days, so it is simply recomputed per render.
   const rows = days.map((day) => ({
     ...day,
     comparison: day.events
-      ? buildDayComparison(day.events, day.dateString, dayStart, {
-          isToday: day.dateString === todayString,
-          now: new Date(now),
-        })
+      ? buildDayComparison(day.events, day.dateString, dayStart, new Date(now))
       : null,
   }))
 
@@ -110,6 +113,7 @@ function CompareContent({
                   label={formatRowLabel(row.dateString, todayString)}
                   day={row.comparison}
                   isLoading={row.isLoading}
+                  isError={row.isError}
                   onOpen={() => handleOpen(row.dateString)}
                 />
               ))}

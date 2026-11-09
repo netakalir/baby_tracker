@@ -9,10 +9,14 @@
  *  - diaper is an instant (zero-length; the row gives it a minimum visible width);
  *  - mood is deliberately not shown.
  *
- * A still-running timer (no `end_time`) extends to `now` only on the current
- * day. On a past day it is not extended — there is no live elapsed time on a
- * day that already happened — and renders as an instant from its stored start,
- * matching the read-only historical clock (`DayClock` `readOnly`).
+ * A still-running timer (no `end_time`) is running *now*, so on every row it
+ * is extended to `now` and clipped to that row's window: on the day it started
+ * (if that day is already over) it fills to the day's end, and on today's row
+ * it stops at `now`. Only the row where the clip is not clamped by the day's
+ * end — i.e. the row containing `now` — draws it as ongoing (open leading
+ * edge). This keeps a past row's sleep total right for an overnight sleep that
+ * is still running (e.g. started 20:00, still asleep at 03:00), and keeps the
+ * line intact when the day rolls over with the screen open.
  */
 
 import type { Event, EventType } from '../../types/database'
@@ -37,16 +41,16 @@ export interface TimelineSegment {
   readonly startMinutes: number
   /** Clamped to [0, 1440]; equals `startMinutes` for an instant. */
   readonly endMinutes: number
-  /** A point-in-time mark (diaper, or a running timer on a past day). */
+  /** A point-in-time mark (a diaper). */
   readonly isInstant: boolean
-  /** A timer still running on the current day, drawn up to `now`. */
+  /** A timer still running whose line on this row ends at `now` (not at the day's end). */
   readonly isOngoing: boolean
 }
 
 /** Everything a comparison row needs for one child-day. */
 export interface DayComparison {
   readonly segments: readonly TimelineSegment[]
-  /** Total sleep inside the day window, in minutes (running sleep counted to `now` on today). */
+  /** Total sleep inside the day window, in minutes (a running sleep counts up to `now`, clipped to the day). */
   readonly sleepMinutes: number
   /** Feedings that started inside the day window. */
   readonly feedingCount: number
@@ -54,13 +58,6 @@ export interface DayComparison {
   readonly diaperCount: number
   /** True when the row has at least one drawable (non-mood) event. */
   readonly hasEvents: boolean
-}
-
-export interface BuildDayComparisonOptions {
-  /** True when `dateString` is the current child-day (enables running-timer extension). */
-  readonly isToday: boolean
-  /** The instant a running timer on the current day is drawn up to. */
-  readonly now: Date
 }
 
 /** Duration events are sleep and feeding — the two timer types. */
@@ -74,12 +71,13 @@ function isDurationType(type: TimelineEventType): type is 'sleep' | 'feeding' {
  * @param events     the child's events overlapping the day (as `fetchEventsForDate` returns them)
  * @param dateString the device-local calendar date (`YYYY-MM-DD`) of the child-day
  * @param dayStart   the child's `day_start` ('HH:MM'), the day window's start
+ * @param now        the current instant, which a still-running timer is drawn up to
  */
 export function buildDayComparison(
   events: readonly Event[],
   dateString: string,
   dayStart: string,
-  { isToday, now }: BuildDayComparisonOptions,
+  now: Date,
 ): DayComparison {
   const dayDate = deviceDayStartOnDate(dateString, dayStart)
   const nowIso = now.toISOString()
@@ -111,14 +109,16 @@ export function buildDayComparison(
     // `type` is already narrowed to a timer type, so "running" is just a
     // missing `end_time` — the same rule as `isRunningTimerEvent`, inlined so
     // this pure module stays free of the Supabase-backed `api` import.
-    const isOngoing = isToday && event.end_time === null
+    const isRunning = event.end_time === null
     const segment = clipEventToDay(
       event.start_time,
-      isOngoing ? nowIso : event.end_time,
+      isRunning ? nowIso : event.end_time,
       dayDate,
       dayStart,
     )
     if (!segment) continue
+    // Ongoing on this row only when its line stops at `now`, not at the day's end.
+    const isOngoing = isRunning && segment.endMinutes < MINUTES_IN_DAY
 
     segments.push({
       id: event.id,

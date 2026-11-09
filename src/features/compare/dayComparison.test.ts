@@ -25,7 +25,8 @@ function makeEvent(overrides: Partial<Event> & Pick<Event, 'type' | 'start_time'
 // Asia/Jerusalem is UTC+3 in June: the 2026-06-10 child-day (midnight
 // day_start) runs 2026-06-09T21:00Z → 2026-06-10T21:00Z.
 const DAY = '2026-06-10'
-const PAST = { isToday: false, now: new Date('2026-06-12T09:00:00.000Z') }
+/** A `now` two days after DAY, so DAY is a fully past row. */
+const PAST = new Date('2026-06-12T09:00:00.000Z')
 
 beforeEach(() => {
   vi.stubEnv('TZ', 'Asia/Jerusalem')
@@ -117,17 +118,32 @@ describe('buildDayComparison — segments', () => {
 describe('buildDayComparison — running timers', () => {
   const runningSleep = makeEvent({ type: 'sleep', start_time: '2026-06-10T10:00:00.000Z', end_time: null })
 
-  it('extends a running timer to now on the current day', () => {
+  it('extends a running timer to now on the current day, drawn as ongoing', () => {
     const now = new Date('2026-06-10T11:30:00.000Z')
-    const day = buildDayComparison([runningSleep], DAY, '00:00', { isToday: true, now })
+    const day = buildDayComparison([runningSleep], DAY, '00:00', now)
     expect(day.segments[0]).toMatchObject({ startMinutes: 780, endMinutes: 870, isOngoing: true, isInstant: false })
     expect(day.sleepMinutes).toBe(90)
   })
 
-  it('does not extend a running timer on a past day (matches the read-only clock)', () => {
+  it('fills a running timer started on a past day to that day’s end, not ongoing there', () => {
+    // Started 13:00 local on DAY, still running two days later.
     const day = buildDayComparison([runningSleep], DAY, '00:00', PAST)
-    expect(day.segments[0]).toMatchObject({ startMinutes: 780, endMinutes: 780, isOngoing: false, isInstant: true })
-    expect(day.sleepMinutes).toBe(0)
+    expect(day.segments[0]).toMatchObject({ startMinutes: 780, endMinutes: 1440, isOngoing: false, isInstant: false })
+    expect(day.sleepMinutes).toBe(660)
+  })
+
+  it('splits a still-running overnight sleep: yesterday fills to midnight, today runs to now', () => {
+    // Asleep since 20:00 local on 06-09, still asleep at 03:00 local on 06-10.
+    const overnight = makeEvent({ type: 'sleep', start_time: '2026-06-09T17:00:00.000Z', end_time: null })
+    const now = new Date('2026-06-10T00:00:00.000Z')
+
+    const yesterday = buildDayComparison([overnight], '2026-06-09', '00:00', now)
+    expect(yesterday.segments[0]).toMatchObject({ startMinutes: 1200, endMinutes: 1440, isOngoing: false })
+    expect(yesterday.sleepMinutes).toBe(240)
+
+    const today = buildDayComparison([overnight], DAY, '00:00', now)
+    expect(today.segments[0]).toMatchObject({ startMinutes: 0, endMinutes: 180, isOngoing: true })
+    expect(today.sleepMinutes).toBe(180)
   })
 
   it('still counts a running feeding that started on the day', () => {
