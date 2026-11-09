@@ -128,7 +128,7 @@ function CompareContent({
 }
 
 /**
- * The "Day comparison" screen: a pushed screen reached from the Week screen.
+ * The "Day comparison" screen: a pushed screen reached from the Today header.
  * Pick any number of the last 14 days and see each as a horizontal 24-hour
  * line — sleep, feeding and diapers in their usual colors — stacked for an
  * at-a-glance comparison. The selection lives here so it survives data reloads.
@@ -144,7 +144,7 @@ export function CompareScreen() {
   return (
     <div className="min-h-screen bg-neutral-50 px-5 pb-16 pt-6">
       <div className="mx-auto w-full max-w-sm">
-        <SettingsHeader title="השוואת ימים" backTo="/week" />
+        <SettingsHeader title="השוואת ימים" backTo="/today" />
 
         {child ? (
           <CompareContent

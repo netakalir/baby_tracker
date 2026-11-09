@@ -74,7 +74,7 @@ function App() {
                 bottom-nav tab (the app has no bottom nav yet). */}
             <Route path="/week" element={<WeekScreen />} />
 
-            {/* Day comparison is a pushed screen reached from the Week screen. */}
+            {/* Day comparison is a pushed screen reached from the Today header. */}
             <Route path="/compare" element={<CompareScreen />} />
 
             {/* Settings is a pushed screen reached from the Today header gear,
