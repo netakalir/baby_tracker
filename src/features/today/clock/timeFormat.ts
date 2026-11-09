@@ -40,7 +40,17 @@ export function formatDuration(startIso: string, endIso: string): string {
   const start = new Date(startIso)
   const end = new Date(endIso)
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return ''
-  const totalMinutes = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60_000))
+  return formatMinutesDuration((end.getTime() - start.getTime()) / 60_000)
+}
+
+/**
+ * Formats a span of minutes as a short Hebrew duration (e.g. "7ש׳ 30ד׳",
+ * "45ד׳", "3ש׳"), rounded to the nearest minute and floored at zero. Shared by
+ * {@link formatDuration} and any view that already holds a minute total (e.g.
+ * a day's summed sleep on the Day-comparison screen).
+ */
+export function formatMinutesDuration(spanMinutes: number): string {
+  const totalMinutes = Math.max(0, Math.round(spanMinutes))
   const hours = Math.floor(totalMinutes / MINUTES_IN_HOUR)
   const minutes = totalMinutes % MINUTES_IN_HOUR
   const parts: string[] = []

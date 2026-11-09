@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Event } from '../../types/database'
 import {
   fetchEventsForDate,
@@ -54,7 +54,18 @@ export function dayEventsKey(childId: string, dateString: string): [string, stri
  * matching mutation hook.
  */
 export function useDayEvents(childId: string, dateString: string, dayStart = '00:00') {
-  return useQuery({
+  return useQuery(dayEventsQueryOptions(childId, dateString, dayStart))
+}
+
+/**
+ * The query definition for a child's events on a specific child-day, shared by
+ * {@link useDayEvents} and multi-day readers (the Day-comparison screen's
+ * `useQueries`), so every reader of a given day hits the same
+ * {@link dayEventsKey} cache entry. For the current child-day the key equals
+ * {@link todayEventsKey}, so it shares the live Today cache too.
+ */
+export function dayEventsQueryOptions(childId: string, dateString: string, dayStart = '00:00') {
+  return queryOptions({
     queryKey: dayEventsKey(childId, dateString),
     queryFn: () => fetchEventsForDate(childId, dateString, dayStart),
   })
