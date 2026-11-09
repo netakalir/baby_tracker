@@ -13,6 +13,7 @@ import { signIn } from '../support/pageActions'
  */
 
 const STRIP_REGION = 'מזג אוויר והמלצת לבוש'
+const DENIED_NOTE = 'הגישה למיקום חסומה בדפדפן. אפשר לאפשר אותה בהגדרות האתר, או לבחור עיר.'
 const SAVED_CITY_KEY = 'baby-tracker:weather:saved-city'
 const CACHED_COORDINATES_KEY = 'baby-tracker:weather:device-coordinates'
 const FORECAST_URL = /^https:\/\/api\.open-meteo\.com\/v1\/forecast\?/
@@ -82,9 +83,29 @@ async function mockWeatherApis(page: Page, options: WeatherMockOptions = {}): Pr
   return requests
 }
 
-/** Makes every geolocation request fail at once, as after a denied permission prompt. */
-async function denyGeolocation(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+/**
+ * Makes every geolocation request fail at once with PERMISSION_DENIED, as after
+ * a denied prompt. With `reportDeniedPermission`, the Permissions API also
+ * reports `'denied'` for geolocation - i.e. location is blocked in the site
+ * settings, so the app should not even attempt a request.
+ */
+async function denyGeolocation(
+  page: Page,
+  { reportDeniedPermission = false }: { reportDeniedPermission?: boolean } = {},
+): Promise<void> {
+  await page.addInitScript((reportDenied: boolean) => {
+    if (reportDenied) {
+      const originalQuery = Permissions.prototype.query
+      Object.defineProperty(Permissions.prototype, 'query', {
+        configurable: true,
+        value(this: Permissions, descriptor: PermissionDescriptor) {
+          if (descriptor.name === 'geolocation') {
+            return Promise.resolve({ state: 'denied' } as PermissionStatus)
+          }
+          return originalQuery.call(this, descriptor)
+        },
+      })
+    }
     Object.defineProperty(Geolocation.prototype, 'getCurrentPosition', {
       configurable: true,
       value: (_onSuccess: PositionCallback, onError?: PositionErrorCallback | null) => {
@@ -97,7 +118,7 @@ async function denyGeolocation(page: Page): Promise<void> {
         })
       },
     })
-  })
+  }, reportDeniedPermission)
 }
 
 /** The device-local calendar date (`YYYY-MM-DD`) `daysAgo` days before now. */
@@ -159,6 +180,8 @@ test.describe('Today screen - weather dressing strip', () => {
 
     const strip = page.getByRole('region', { name: STRIP_REGION })
     await strip.getByRole('button', { name: /בחרו עיר/ }).click()
+    // The fallback explains *why* it needs a city.
+    await expect(strip.getByText(DENIED_NOTE)).toBeVisible()
 
     await strip.getByLabel('חיפוש עיר').fill('רעננה')
     await strip.getByRole('button', { name: /רעננה.*מחוז המרכז/ }).click()
@@ -182,7 +205,7 @@ test.describe('Today screen - weather dressing strip', () => {
     expect(lastForecast?.searchParams.get('longitude')).toBe('34.9')
   })
 
-  test('"use my location" drops the saved city and cached position and locates again', async ({
+  test('"use my location" with location granted swaps the saved city for a fresh device position', async ({
     page,
     factory,
   }) => {
@@ -222,8 +245,8 @@ test.describe('Today screen - weather dressing strip', () => {
     await strip.getByRole('button', { name: 'השתמש במיקום שלי' }).click()
     await expect(stripButton).toBeFocused()
 
-    // Back on the device position: the cached Jerusalem fix was discarded and
-    // geolocation was asked again (Raanana, rounded), not the stale cache.
+    // Back on the device position: geolocation was asked afresh (Raanana,
+    // rounded) rather than reusing the cached Jerusalem fix, which it replaced.
     await expect(stripButton).toContainText('רעננה')
     const newForecasts = requests.forecast.slice(forecastsBefore)
     expect(newForecasts.length).toBeGreaterThan(0)
@@ -241,6 +264,49 @@ test.describe('Today screen - weather dressing strip', () => {
     )
     expect(stored.savedCity).toBeNull()
     expect(JSON.parse(stored.cached ?? 'null')).toMatchObject({ latitude: 32.2, longitude: 34.9 })
+  })
+
+  test('"use my location" while location is blocked keeps the saved city and explains why', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'נטע' })
+    await denyGeolocation(page, { reportDeniedPermission: true })
+    const requests = await mockWeatherApis(page, { temperature: 24, apparentTemperature: 24 })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    await page.evaluate((savedCityKey) => {
+      localStorage.setItem(
+        savedCityKey,
+        JSON.stringify({ name: 'נתניה', latitude: 32.3, longitude: 34.9 }),
+      )
+    }, SAVED_CITY_KEY)
+    await page.reload()
+
+    const strip = page.getByRole('region', { name: STRIP_REGION })
+    const stripButton = strip.getByRole('button').first()
+    await expect(stripButton).toContainText('נתניה')
+    await expect(stripButton).toContainText('24°')
+    const forecastsBefore = requests.forecast.length
+
+    await stripButton.click()
+    await strip.getByRole('button', { name: 'השתמש במיקום שלי' }).click()
+
+    // The denial is explained in the still-open panel...
+    await expect(strip.getByText(DENIED_NOTE)).toBeVisible()
+    await expect(strip.getByRole('button', { name: 'השתמש במיקום שלי' })).toBeVisible()
+    // ...and nothing was lost: same city, same forecast, nothing refetched.
+    await expect(stripButton).toContainText('נתניה')
+    await expect(stripButton).toContainText('24°')
+    expect(requests.forecast).toHaveLength(forecastsBefore)
+    const savedCity = await page.evaluate(
+      (savedCityKey) => localStorage.getItem(savedCityKey),
+      SAVED_CITY_KEY,
+    )
+    expect(JSON.parse(savedCity ?? 'null')).toMatchObject({ name: 'נתניה' })
   })
 
   test('a weather API failure shows a quiet one-line fallback, not an error banner', async ({
