@@ -569,6 +569,39 @@ test.describe('Today screen - weather dressing strip', () => {
     await expect(disclaimer).toBeHidden()
   })
 
+  test('keyboard focus leaving the panel closes it without pulling focus back', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'שקד' })
+    await page.context().grantPermissions(['geolocation'])
+    await page.context().setGeolocation(DEVICE_POSITION)
+    await mockWeatherApis(page)
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    const strip = page.getByRole('region', { name: STRIP_REGION })
+    const stripButton = strip.getByRole('button').first()
+    await expect(stripButton).toContainText('רעננה')
+
+    // Open from the keyboard, so focus is on the strip button.
+    await stripButton.focus()
+    await page.keyboard.press('Enter')
+    const popover = await popoverFor(page, stripButton)
+    await expect(popover).toBeVisible()
+
+    // Shift+Tab leaves the strip backwards, to the header's settings button.
+    await page.keyboard.press('Shift+Tab')
+    const settingsButton = page.getByRole('button', { name: 'הגדרות' })
+    await expect(settingsButton).toBeFocused()
+    await expect(popover).toBeHidden()
+    await expect(stripButton).toHaveAttribute('aria-expanded', 'false')
+    // The close did not yank focus back to the strip.
+    await expect(settingsButton).toBeFocused()
+  })
+
   test('at 320×568 the open city search stays inside the screen', async ({ page, factory }) => {
     const user = await factory.createUser()
     await factory.seedFamilyWithChild(user, { childName: 'דן' })
@@ -592,8 +625,15 @@ test.describe('Today screen - weather dressing strip', () => {
     expect(box!.x + box!.width).toBeLessThanOrEqual(320 + 1)
     expect(box!.y + box!.height).toBeLessThanOrEqual(568 + 1)
 
-    // The last result is still reachable by scrolling inside the popover.
-    const lastResult = strip.getByRole('button', { name: /רעננים/ })
+    // Five results overflow the ~60dvh cap: the popover itself scrolls...
+    const overflow = await popover.evaluate((element) => ({
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight,
+    }))
+    expect(overflow.scrollHeight).toBeGreaterThan(overflow.clientHeight)
+
+    // ...and the last result is reachable by scrolling inside it.
+    const lastResult = strip.getByRole('button', { name: /^רעננים/ })
     await lastResult.scrollIntoViewIfNeeded()
     await expect(lastResult).toBeInViewport()
   })
