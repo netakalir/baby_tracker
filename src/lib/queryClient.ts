@@ -39,7 +39,12 @@ export const queryClient = new QueryClient({
   // Global error handling: surface real data-layer failures to Sentry from one
   // place, rather than scattering captureException calls across every hook.
   queryCache: new QueryCache({
-    onError: (error) => captureQueryError(error, 'query'),
+    onError: (error, query) => {
+      // A feature may mark some of its errors as expected (see the typed
+      // `queryMeta` in src/types/react-query.d.ts) - those are not reported.
+      if (query.meta?.skipErrorReport?.(error)) return
+      captureQueryError(error, 'query')
+    },
   }),
   mutationCache: new MutationCache({
     onError: (error) => captureQueryError(error, 'mutation'),

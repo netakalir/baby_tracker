@@ -1,5 +1,5 @@
 import { expect, test } from '../support/fixtures'
-import { signIn } from '../support/pageActions'
+import { openFromHeaderMenu, signIn } from '../support/pageActions'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -129,7 +129,7 @@ test.describe('Today screen — historical mode (§9)', () => {
 
     await page.clock.setFixedTime(FIXED_NOW)
     await signIn(page, user)
-    await page.getByRole('button', { name: 'שבוע' }).click()
+    await openFromHeaderMenu(page, 'שבוע')
     await expect(page).toHaveURL(/\/week$/)
 
     // The only column with sleep data is the past day; clicking it opens Today

@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest'
-import { isReportableError } from './queryClient'
+import * as Sentry from '@sentry/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { isReportableError, queryClient } from './queryClient'
+
+vi.mock('@sentry/react', () => ({ captureException: vi.fn() }))
 
 /**
  * Unit tests for `isReportableError`, which drives both Sentry reporting
@@ -29,5 +32,58 @@ describe('isReportableError', () => {
 
   it('is case-insensitive when matching benign auth patterns', () => {
     expect(isReportableError(new Error('AUTH SESSION MISSING'))).toBe(false)
+  })
+})
+
+/**
+ * The global QueryCache `onError` honours a query's typed
+ * `meta.skipErrorReport`, so a feature can keep expected errors (e.g. a
+ * third-party outage) out of Sentry without `src/lib` knowing its error types.
+ */
+describe('queryClient error reporting', () => {
+  class OutageError extends Error {}
+
+  /** Runs a query that fails once with `error` (no retries), swallowing the rejection. */
+  async function runFailingQuery(
+    error: Error,
+    meta?: { skipErrorReport?: (error: unknown) => boolean },
+  ): Promise<void> {
+    await queryClient
+      .fetchQuery({
+        queryKey: ['query-client-test', Math.random()],
+        queryFn: () => Promise.reject(error),
+        retry: false,
+        meta,
+      })
+      .catch(() => undefined)
+  }
+
+  afterEach(() => {
+    vi.mocked(Sentry.captureException).mockClear()
+    queryClient.clear()
+  })
+
+  it('reports a failing query without meta', async () => {
+    const error = new Error('Unexpected server error')
+    await runFailingQuery(error)
+    expect(Sentry.captureException).toHaveBeenCalledWith(error, { tags: { source: 'query' } })
+  })
+
+  it('skips reporting when skipErrorReport returns true for the error', async () => {
+    await runFailingQuery(new OutageError('upstream down'), {
+      skipErrorReport: (error) => error instanceof OutageError,
+    })
+    expect(Sentry.captureException).not.toHaveBeenCalled()
+  })
+
+  it('still reports when skipErrorReport returns false for the error', async () => {
+    const error = new Error('schema mismatch')
+    await runFailingQuery(error, { skipErrorReport: (caught) => caught instanceof OutageError })
+    expect(Sentry.captureException).toHaveBeenCalledWith(error, { tags: { source: 'query' } })
+  })
+
+  it('still skips benign auth errors regardless of meta', async () => {
+    await runFailingQuery(new Error('Auth session missing'))
+    expect(Sentry.captureException).not.toHaveBeenCalled()
   })
 })
