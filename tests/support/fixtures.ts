@@ -1,8 +1,8 @@
 import { test as base, expect } from '@playwright/test'
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Child, Event } from '../../src/types/database'
 import { adminClient } from './adminClient'
-import { testEnv } from './testEnv'
+import { clearCachedSessions, signInThroughApi } from './authSessions'
 
 /** Meets the project's 6-char minimum; the same for every fixture user. */
 const TEST_PASSWORD = 'e2e-test-pw-123'
@@ -90,14 +90,9 @@ export const test = base.extend<{ factory: TestFactory }>({
       const existing = authedClients.get(user.id)
       if (existing) return existing
 
-      const client = createClient(testEnv.supabaseUrl, testEnv.supabaseAnonKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      })
-      const { error } = await client.auth.signInWithPassword({
-        email: user.email,
-        password: user.password,
-      })
-      if (error) throw error
+      // Also caches the session, so a later `signIn(page, user)` reuses it
+      // instead of signing the same user in a second time.
+      const { client } = await signInThroughApi(user)
       authedClients.set(user.id, client)
       return client
     }
@@ -199,8 +194,14 @@ export const test = base.extend<{ factory: TestFactory }>({
 
     await use(factory)
 
+    // The browser no longer needs the cached sessions once the test body is done.
+    clearCachedSessions()
+
     // Delete families (cascades children/members/invites) as their owner, then
     // sign those clients out, then remove the auth users via the admin API.
+    // The owner's access token still authorizes the delete even if the browser
+    // signed out (revoking the shared session): PostgREST still accepts the
+    // access JWT until it expires.
     for (const { familyId, ownerId } of seededFamilies) {
       const client = authedClients.get(ownerId)
       if (!client) continue

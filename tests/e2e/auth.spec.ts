@@ -1,5 +1,5 @@
 import { expect, test } from '../support/fixtures'
-import { openFromHeaderMenu, signIn } from '../support/pageActions'
+import { openFromHeaderMenu, signInThroughUi } from '../support/pageActions'
 
 test.describe('authentication and onboarding', () => {
   test('a new user signs in and completes onboarding to the Today screen', async ({
@@ -8,7 +8,7 @@ test.describe('authentication and onboarding', () => {
   }) => {
     const user = await factory.createUser()
 
-    await signIn(page, user)
+    await signInThroughUi(page, user)
 
     // No family yet -> the create-or-join screen.
     await expect(page).toHaveURL(/\/onboarding$/)
@@ -44,7 +44,7 @@ test.describe('authentication and onboarding', () => {
     const user = await factory.createUser()
     const family = await factory.seedFamilyWithChild(user, { childName: 'תום' })
 
-    await signIn(page, user)
+    await signInThroughUi(page, user)
 
     await expect(page).toHaveURL(/\/today$/)
     await expect(page.getByRole('heading', { name: family.childName })).toBeVisible()

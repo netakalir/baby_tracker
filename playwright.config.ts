@@ -6,13 +6,18 @@ import { testEnv } from './tests/support/testEnv'
  * project. Throwaway users are created (pre-confirmed) and deleted per test
  * via the service_role key in `.env.test` - see tests/support/fixtures.ts.
  *
- * Runs serially (a single worker) on purpose: the tests share one hosted
- * project and its auth rate limits, so parallel sign-ins would be flaky.
+ * Runs with a small, fixed pool of workers: the tests share one hosted project
+ * and its auth rate limits. `signIn` reuses the factory's API session instead
+ * of submitting the login form (tests/support/authSessions.ts), which cut the
+ * sign-ins per run enough for 3 parallel workers to stay within those limits
+ * (verified: two full runs, 74/74, ~4 min vs ~9 min serially). Raise this only
+ * together with the test project's auth rate limits. Tests within one file
+ * still run in order (`fullyParallel: false`); each test seeds its own users.
  */
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
-  workers: 1,
+  workers: 3,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
   reporter: process.env.CI ? 'github' : 'list',
