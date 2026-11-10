@@ -583,9 +583,17 @@ test.describe('Today screen - header menu', () => {
     await expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
     await expect(trigger).toHaveAttribute('aria-expanded', 'false')
 
+    // The menu floats over the page: opening it must not push the clock down.
+    const clock = page.getByRole('img', { name: 'שעון 24 שעות של אירועי היום' })
+    const clockBefore = await clock.boundingBox()
+    expect(clockBefore).not.toBeNull()
+
     // Opening moves focus to the first item.
     await trigger.click()
     await expect(menu).toBeVisible()
+    const clockAfter = await clock.boundingBox()
+    expect(clockAfter).not.toBeNull()
+    expect(clockAfter!.y).toBe(clockBefore!.y)
     await expect(trigger).toHaveAttribute('aria-expanded', 'true')
     await expect(menu.getByRole('menuitem', { name: 'שבוע' })).toBeFocused()
 

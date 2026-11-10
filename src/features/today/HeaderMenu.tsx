@@ -167,6 +167,9 @@ export function HeaderMenu({ onOpenWeek, onOpenCompare, onOpenSettings }: Header
           onKeyDown={handleMenuKeyDown}
           // Anchored to the trigger's end edge (left in RTL, where the trigger
           // sits) so the menu opens inward and never spills past the screen.
+          // Absolutely positioned on the same `z-10` layer as the quick-log
+          // popups, it floats over the page and never pushes the header, the
+          // content below it, or the clock down.
           className="absolute end-0 top-full z-10 mt-2 flex min-w-40 flex-col items-stretch gap-1 rounded-lg border border-neutral-200 bg-neutral-0 p-2 shadow-md"
         >
           {items.map((item) => (
