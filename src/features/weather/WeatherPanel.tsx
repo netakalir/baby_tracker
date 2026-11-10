@@ -33,7 +33,11 @@ interface WeatherPanelProps {
 }
 
 /**
- * The small inline panel that opens under the weather strip. In `details` mode
+ * The small popover that floats right under the weather strip - over the
+ * clock, never pushing the page down. It matches the strip's width, sits above
+ * page content (z-20: over the clock and the sticky quick-log bar, z-10), and
+ * scrolls internally past ~60% of the viewport height so a long result list
+ * never runs off a small screen. In `details` mode
  * it shows the feels-like temperature, the full dressing advice and a short
  * disclaimer, with actions to switch city or go back to the device location;
  * in `search` mode it shows the city search.
@@ -53,7 +57,7 @@ export function WeatherPanel({
   return (
     <div
       id={id}
-      className="mt-2 space-y-3 rounded-lg border border-neutral-200 bg-neutral-0 p-4 shadow-sm"
+      className="absolute inset-x-0 top-full z-20 mt-2 max-h-[60vh] space-y-3 overflow-y-auto rounded-lg border border-neutral-200 bg-neutral-0 p-4 shadow-md"
     >
       {mode === 'search' ? (
         <CitySearch onChoose={onChooseCity} onInput={onSearchInput} />

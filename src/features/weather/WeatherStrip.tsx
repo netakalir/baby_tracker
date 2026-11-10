@@ -1,4 +1,13 @@
-import { memo, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
 import { dressingAdviceFor } from './dressingAdvice'
 import { formatDegrees } from './formatDegrees'
 import type { DevicePositionFailure } from './devicePosition'
@@ -71,6 +80,8 @@ function Separator() {
 export const WeatherStrip = memo(function WeatherStrip() {
   const panelId = useId()
   const stripButtonRef = useRef<HTMLButtonElement>(null)
+  // The strip + its popover. A pointer down outside it closes the popover.
+  const containerRef = useRef<HTMLElement>(null)
   const { location, chooseCity, locateDevice, cancelLocateDevice, isLocatingDevice } =
     useWeatherLocation()
   const coordinates = location.status === 'ready' ? location.coordinates : null
@@ -94,19 +105,38 @@ export const WeatherStrip = memo(function WeatherStrip() {
     (location.status === 'ready' && weatherQuery.isPending && !isOffline)
 
   /**
-   * Closes the panel and puts focus back on the strip button. Focus moves
-   * *before* the panel unmounts, so it never falls back to <body> when the
-   * focused control (a search result, an action, the search field) goes away.
-   * Closing also abandons a pending "use my location", so its late result can
-   * neither switch the location nor pull focus back here.
+   * Closes the panel. If focus is inside it (a search result, an action, the
+   * search field), focus moves back to the strip button *before* the panel
+   * unmounts, so it never falls back to <body>. Focus elsewhere (e.g. after an
+   * outside tap) is left alone. Closing also abandons a pending "use my
+   * location", so its late result can neither switch the location nor pull
+   * focus back here. Stable: every dependency is a ref, a setter or stable.
    */
-  const closePanel = (): void => {
+  const closePanel = useCallback((): void => {
     cancelLocateDevice()
-    stripButtonRef.current?.focus()
+    if (containerRef.current?.contains(document.activeElement)) {
+      stripButtonRef.current?.focus()
+    }
     setIsOpen(false)
     setMode('details')
     setTapFailure(null)
-  }
+  }, [cancelLocateDevice])
+
+  // Dismiss the popover when the parent taps anywhere outside it - the same
+  // pattern as the quick-log menus. A tap on the strip itself stays inside the
+  // container and is left to the strip's own toggle; a tap inside the popover
+  // is ignored. Attached only while open; `pointerdown` covers touch and mouse.
+  useEffect(() => {
+    if (!isOpen) return
+
+    function handlePointerDown(event: PointerEvent) {
+      if (containerRef.current?.contains(event.target as Node)) return
+      closePanel()
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [isOpen, closePanel])
 
   const togglePanel = (): void => {
     // A loading strip has nothing to show yet; the tap is simply ignored.
@@ -187,7 +217,14 @@ export const WeatherStrip = memo(function WeatherStrip() {
   }
 
   return (
-    <section aria-label={REGION_LABEL} onKeyDown={handleKeyDown}>
+    // `relative`: the popover is positioned against the strip, so opening it
+    // never moves the strip or the page below.
+    <section
+      ref={containerRef}
+      aria-label={REGION_LABEL}
+      onKeyDown={handleKeyDown}
+      className="relative"
+    >
       {/* One stable button across every state (loading included), so focus
           returned to it survives state changes. Loading is conveyed with
           `aria-busy` - deliberately not `role="status"`, which the quick-log
