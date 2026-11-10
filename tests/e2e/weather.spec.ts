@@ -1,4 +1,4 @@
-import type { Page, Route } from '@playwright/test'
+import type { Locator, Page, Route } from '@playwright/test'
 import { expect, test } from '../support/fixtures'
 import { signIn } from '../support/pageActions'
 
@@ -13,6 +13,7 @@ import { signIn } from '../support/pageActions'
  */
 
 const STRIP_REGION = 'מזג אוויר והמלצת לבוש'
+const CLOCK_LABEL = 'שעון 24 שעות של אירועי היום'
 const DENIED_NOTE = 'הגישה למיקום חסומה בדפדפן. אפשר לאפשר אותה בהגדרות האתר, או לבחור עיר.'
 const SAVED_CITY_KEY = 'baby-tracker:weather:saved-city'
 const CACHED_COORDINATES_KEY = 'baby-tracker:weather:device-coordinates'
@@ -79,6 +80,9 @@ async function mockWeatherApis(page: Page, options: WeatherMockOptions = {}): Pr
       results: [
         { id: 293619, name: 'רעננה', latitude: 32.18, longitude: 34.87, country: 'ישראל', admin1: 'מחוז המרכז' },
         { id: 293620, name: 'רעננה צפון', latitude: 32.2, longitude: 34.88, country: 'ישראל' },
+        { id: 293621, name: 'רעות', latitude: 31.89, longitude: 35.02, country: 'ישראל', admin1: 'מחוז מרכז' },
+        { id: 293622, name: 'רעים', latitude: 31.39, longitude: 34.46, country: 'ישראל', admin1: 'מחוז הדרום' },
+        { id: 293623, name: 'רעננים', latitude: 32.1, longitude: 34.9, country: 'ישראל', admin1: 'מחוז תל אביב' },
       ],
     })
   })
@@ -175,6 +179,13 @@ async function deferGeolocation(
       },
     })
   }, failFirstAttempt)
+}
+
+/** The popover a strip button controls, found through its `aria-controls`. */
+async function popoverFor(page: Page, stripButton: Locator): Promise<Locator> {
+  const panelId = await stripButton.getAttribute('aria-controls')
+  expect(panelId, 'the open strip should point at its popover').toBeTruthy()
+  return page.locator(`[id="${panelId}"]`)
 }
 
 /** The device-local calendar date (`YYYY-MM-DD`) `daysAgo` days before now. */
@@ -489,6 +500,102 @@ test.describe('Today screen - weather dressing strip', () => {
     await expect(searchInput).toHaveValue('רענ')
     await expect(stripButton).toHaveAttribute('aria-expanded', 'true')
     await expect(stripButton).toContainText('בחרו עיר')
+  })
+
+  test('the panel floats over the page: opening it does not move the clock', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'אורי' })
+    await page.context().grantPermissions(['geolocation'])
+    await page.context().setGeolocation(DEVICE_POSITION)
+    await mockWeatherApis(page)
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    const strip = page.getByRole('region', { name: STRIP_REGION })
+    const stripButton = strip.getByRole('button').first()
+    await expect(stripButton).toContainText('רעננה')
+    const clock = page.getByRole('img', { name: CLOCK_LABEL })
+    const clockBefore = await clock.boundingBox()
+    const stripBefore = await stripButton.boundingBox()
+
+    await stripButton.click()
+    const popover = await popoverFor(page, stripButton)
+    await expect(popover).toBeVisible()
+
+    // Nothing below (or the strip itself) moved: the popover is an overlay.
+    expect(await clock.boundingBox()).toEqual(clockBefore)
+    expect(await stripButton.boundingBox()).toEqual(stripBefore)
+
+    // It hangs right under the strip, at the strip's width.
+    const popoverBox = await popover.boundingBox()
+    expect(popoverBox).not.toBeNull()
+    expect(popoverBox!.y).toBeGreaterThanOrEqual(stripBefore!.y + stripBefore!.height)
+    expect(Math.abs(popoverBox!.width - stripBefore!.width)).toBeLessThanOrEqual(1)
+  })
+
+  test('a tap outside the panel closes it', async ({ page, factory }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'גיל' })
+    await page.context().grantPermissions(['geolocation'])
+    await page.context().setGeolocation(DEVICE_POSITION)
+    await mockWeatherApis(page)
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    const strip = page.getByRole('region', { name: STRIP_REGION })
+    const stripButton = strip.getByRole('button').first()
+    await stripButton.click()
+    const disclaimer = strip.getByText('טיפ כללי, לא הנחיה רפואית')
+    await expect(disclaimer).toBeVisible()
+
+    // A tap inside the popover keeps it open...
+    await disclaimer.click()
+    await expect(disclaimer).toBeVisible()
+
+    // ...a tap outside (the page's top corner, above the strip) closes it.
+    await page.mouse.click(5, 5)
+    await expect(disclaimer).toBeHidden()
+    await expect(stripButton).toHaveAttribute('aria-expanded', 'false')
+
+    // And the strip itself still toggles it.
+    await stripButton.click()
+    await expect(disclaimer).toBeVisible()
+    await stripButton.click()
+    await expect(disclaimer).toBeHidden()
+  })
+
+  test('at 320×568 the open city search stays inside the screen', async ({ page, factory }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'דן' })
+    await page.setViewportSize({ width: 320, height: 568 })
+    await denyGeolocation(page)
+    await mockWeatherApis(page)
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    const strip = page.getByRole('region', { name: STRIP_REGION })
+    const stripButton = strip.getByRole('button').first()
+    await stripButton.click()
+    await strip.getByLabel('חיפוש עיר').fill('רע')
+    await expect(strip.getByRole('list', { name: 'תוצאות חיפוש' }).getByRole('listitem')).toHaveCount(5)
+
+    const popover = await popoverFor(page, stripButton)
+    const box = await popover.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.x).toBeGreaterThanOrEqual(-1)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(320 + 1)
+    expect(box!.y + box!.height).toBeLessThanOrEqual(568 + 1)
+
+    // The last result is still reachable by scrolling inside the popover.
+    const lastResult = strip.getByRole('button', { name: /רעננים/ })
+    await lastResult.scrollIntoViewIfNeeded()
+    await expect(lastResult).toBeInViewport()
   })
 
   test('a weather API failure shows a quiet one-line fallback, not an error banner', async ({
