@@ -38,10 +38,12 @@ interface TodayHeaderProps {
  * for now it is a static identity). A single menu button at the edge opens the
  * navigation to the Week screen, Day comparison and the Settings hub.
  *
- * Fits down to 320px without horizontal overflow: the pill and menu button
- * never shrink (the name is only capped by its own `max-w`, so it stays fully
- * readable), and the date takes the remaining space, truncating with an
- * ellipsis when it doesn't fit.
+ * Fits down to 320px without horizontal overflow. The date truncates first:
+ * it takes only the space the pill and menu button leave, with an ellipsis. The
+ * child name is shown in full up to its `max-w-28` cap (a very long name still
+ * truncates at the cap). Only if the date is already down to its small
+ * `min-w-12` floor (e.g. a large root font size) does the name shrink further,
+ * so the header never overflows horizontally.
  */
 const TodayHeader = memo(function TodayHeader({
   childName,
@@ -51,19 +53,19 @@ const TodayHeader = memo(function TodayHeader({
 }: TodayHeaderProps) {
   return (
     <header className="flex items-center justify-between gap-3">
-      <div className="min-w-0 flex-1">
+      <div className="min-w-12 flex-1">
         <p className="truncate text-lg font-semibold text-neutral-900">
           {headerDateFormatter.format(new Date())}
         </p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <div className="flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-0 py-1 pe-2 ps-3 shadow-sm">
-          <h1 className="max-w-28 truncate text-sm font-medium text-neutral-800">
+      <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2 rounded-full border border-neutral-200 bg-neutral-0 py-1 pe-2 ps-3 shadow-sm">
+          <h1 className="min-w-0 max-w-28 truncate text-sm font-medium text-neutral-800">
             {childName}
           </h1>
           <span
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-50 text-base"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 text-base"
             aria-hidden="true"
           >
             👶

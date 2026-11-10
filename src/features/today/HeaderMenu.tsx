@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 
 interface HeaderMenuProps {
   onOpenWeek: () => void
@@ -65,13 +65,16 @@ function SettingsIcon() {
  *
  * Keyboard: opening moves focus to the first item; ArrowUp/ArrowDown (and
  * Home/End) move between items; Escape closes and returns focus to the button;
- * Tab closes it so focus never strands inside a hidden menu.
+ * Tab closes it so focus never strands inside a hidden menu. Keys are handled on
+ * the panel itself, which is focusable (`tabIndex={-1}`), so a tap on its
+ * padding keeps focus in the menu and Escape still works from there.
  */
 export function HeaderMenu({ onOpenWeek, onOpenCompare, onOpenSettings }: HeaderMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const menuId = useId()
 
   const items: readonly MenuItem[] = [
     { id: 'week', label: 'שבוע', icon: <WeekIcon />, onSelect: onOpenWeek },
@@ -150,7 +153,7 @@ export function HeaderMenu({ onOpenWeek, onOpenCompare, onOpenSettings }: Header
         aria-label="תפריט"
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        aria-controls={isOpen ? 'today-header-menu' : undefined}
+        aria-controls={isOpen ? menuId : undefined}
         className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-colors duration-fast hover:bg-neutral-100 hover:text-neutral-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
       >
         <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
@@ -161,16 +164,19 @@ export function HeaderMenu({ onOpenWeek, onOpenCompare, onOpenSettings }: Header
       {isOpen && (
         <div
           ref={menuRef}
-          id="today-header-menu"
+          id={menuId}
           role="menu"
           aria-label="תפריט"
+          tabIndex={-1}
           onKeyDown={handleMenuKeyDown}
           // Anchored to the trigger's end edge (left in RTL, where the trigger
           // sits) so the menu opens inward and never spills past the screen.
-          // Absolutely positioned on the same `z-10` layer as the quick-log
-          // popups, it floats over the page and never pushes the header, the
-          // content below it, or the clock down.
-          className="absolute end-0 top-full z-10 mt-2 flex min-w-40 flex-col items-stretch gap-1 rounded-lg border border-neutral-200 bg-neutral-0 p-2 shadow-md"
+          // Absolutely positioned, it floats over the page and never pushes
+          // the header, the content below it, or the clock down.
+          // Layering: z-30 keeps the menu above the weather popover (z-20) and the quick-log bar (z-10).
+          // `w-max`: the panel is exactly as wide as its longest item
+          // ("השוואת ימים" + icon, ~150px), never a fixed width.
+          className="absolute end-0 top-full z-30 mt-2 flex w-max flex-col items-stretch gap-1 rounded-lg border border-neutral-200 bg-neutral-0 p-2 shadow-md focus:outline-none"
         >
           {items.map((item) => (
             <button
@@ -178,7 +184,7 @@ export function HeaderMenu({ onOpenWeek, onOpenCompare, onOpenSettings }: Header
               type="button"
               role="menuitem"
               onClick={() => handleSelect(item)}
-              className="flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-start text-sm font-medium text-neutral-800 transition-transform duration-fast active:scale-95 hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-start text-sm font-medium text-neutral-800 transition-transform duration-fast active:scale-95 hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               <span className="text-neutral-600">{item.icon}</span>
               {item.label}
