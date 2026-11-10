@@ -1,6 +1,6 @@
 import { deviceDayBounds } from '../../src/features/today/todayDate'
 import { expect, test } from '../support/fixtures'
-import { signIn } from '../support/pageActions'
+import { openFromHeaderMenu, signIn } from '../support/pageActions'
 
 test.describe('Today screen - quick logging', () => {
   test('an empty day shows the empty-state clock until an event is logged', async ({
@@ -164,12 +164,12 @@ test.describe('Today screen - quick-log menus (dismiss & fit)', () => {
     expect(box!.x + box!.width).toBeLessThanOrEqual(375 + 1)
   })
 
-  test('the header (date, child pill, three icons) fits a 320px screen without overflow', async ({
+  test('the header keeps the full child name and a visible date on a 320px screen', async ({
     page,
     factory,
   }) => {
     const user = await factory.createUser()
-    // A long name exercises the pill's truncation at the narrowest width.
+    // A long name: the pill must keep it readable; the date is what truncates.
     await factory.seedFamilyWithChild(user, { childName: 'אלכסנדרה-מרגריטה' })
 
     await page.setViewportSize({ width: 320, height: 720 })
@@ -177,28 +177,54 @@ test.describe('Today screen - quick-log menus (dismiss & fit)', () => {
     await signIn(page, user)
     await expect(page).toHaveURL(/\/today$/)
 
-    // Every header icon sits fully within the screen, both edges.
-    for (const name of ['שבוע', 'השוואת ימים', 'הגדרות']) {
-      const box = await page.getByRole('button', { name }).boundingBox()
-      expect(box, name).not.toBeNull()
-      expect(box!.x, name).toBeGreaterThanOrEqual(-1)
-      expect(box!.x + box!.width, name).toBeLessThanOrEqual(320 + 1)
-    }
-
-    // The date keeps a readable floor (it may truncate, never collapse to 0),
-    // and the child pill stays on screen — the long name is what gives way.
     const header = page.locator('header').first()
-    const dateBox = await header.locator('p').first().boundingBox()
+
+    // The child name is shown at a real width, not squeezed to an ellipsis.
+    const name = page.getByRole('heading', { name: 'אלכסנדרה-מרגריטה' })
+    await expect(name).toBeVisible()
+    const nameBox = await name.boundingBox()
+    expect(nameBox).not.toBeNull()
+    expect(nameBox!.width).toBeGreaterThanOrEqual(60)
+
+    // The date (full form, with the weekday) stays visible, possibly truncated.
+    const date = header.locator('p').first()
+    await expect(date).toBeVisible()
+    await expect(date).toContainText(/יום/)
+    const dateBox = await date.boundingBox()
     expect(dateBox).not.toBeNull()
     expect(dateBox!.width).toBeGreaterThanOrEqual(40)
-    await expect(page.getByRole('heading', { name: 'אלכסנדרה-מרגריטה' })).toBeVisible()
 
-    // The header itself never overflows, and the page never scrolls sideways.
+    // The menu button sits fully within the screen.
+    const menuBox = await page.getByRole('button', { name: 'תפריט' }).boundingBox()
+    expect(menuBox).not.toBeNull()
+    expect(menuBox!.x).toBeGreaterThanOrEqual(-1)
+    expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(320 + 1)
+
+    // Nothing overflows: not the header, not the page.
     expect(await header.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false)
     const pageOverflows = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     )
     expect(pageOverflows).toBe(false)
+  })
+
+  test('the header menu opens inside a 320px screen', async ({ page, factory }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'אלכסנדרה-מרגריטה' })
+
+    await page.setViewportSize({ width: 320, height: 720 })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    await page.getByRole('button', { name: 'תפריט' }).click()
+    const menu = page.getByRole('menu', { name: 'תפריט' })
+    await expect(menu).toBeVisible()
+
+    const box = await menu.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.x).toBeGreaterThanOrEqual(-1)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(320 + 1)
   })
 
   test('the quick-log bar fits within a very narrow (320px) phone screen', async ({
@@ -538,5 +564,56 @@ test.describe('Today screen - per-child day boundary (day_start)', () => {
     // The in-window mood renders; the pre-boundary diaper is scoped out entirely.
     await expect(page.getByRole('img', { name: /מצב רוח בשעה/ })).toBeVisible()
     await expect(page.getByRole('img', { name: /החתלה/ })).toHaveCount(0)
+  })
+})
+
+test.describe('Today screen - header menu', () => {
+  test('the menu opens and closes by outside tap and Escape, and each item navigates', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'ליאור' })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    const trigger = page.getByRole('button', { name: 'תפריט' })
+    const menu = page.getByRole('menu', { name: 'תפריט' })
+    await expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+
+    // Opening moves focus to the first item.
+    await trigger.click()
+    await expect(menu).toBeVisible()
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    await expect(menu.getByRole('menuitem', { name: 'שבוע' })).toBeFocused()
+
+    // Arrow keys move between items.
+    await page.keyboard.press('ArrowDown')
+    await expect(menu.getByRole('menuitem', { name: 'השוואת ימים' })).toBeFocused()
+
+    // A tap outside the menu (on the empty page margin) closes it.
+    await page.mouse.click(5, 600)
+    await expect(menu).toBeHidden()
+
+    // Escape closes it and returns focus to the trigger.
+    await trigger.click()
+    await expect(menu).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(menu).toBeHidden()
+    await expect(trigger).toBeFocused()
+
+    // Each item navigates to its screen.
+    const destinations = [
+      { item: 'שבוע', url: /\/week$/ },
+      { item: 'השוואת ימים', url: /\/compare$/ },
+      { item: 'הגדרות', url: /\/settings$/ },
+    ] as const
+    for (const { item, url } of destinations) {
+      await page.goto('/today')
+      await openFromHeaderMenu(page, item)
+      await expect(page).toHaveURL(url)
+    }
   })
 })

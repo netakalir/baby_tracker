@@ -1,5 +1,5 @@
 import { expect, test } from '../support/fixtures'
-import { signIn } from '../support/pageActions'
+import { openFromHeaderMenu, signIn } from '../support/pageActions'
 
 test.describe('Settings hub', () => {
   test('opens from the Today header gear and drills into each sub-screen', async ({
@@ -12,8 +12,8 @@ test.describe('Settings hub', () => {
     await signIn(page, user)
     await expect(page).toHaveURL(/\/today$/)
 
-    // Settings is reached from a header gear, not a bottom-nav tab.
-    await page.getByRole('button', { name: 'הגדרות' }).click()
+    // Settings is reached from the header menu, not a bottom-nav tab.
+    await openFromHeaderMenu(page, 'הגדרות')
     await expect(page).toHaveURL(/\/settings$/)
     await expect(page.getByRole('heading', { name: 'הגדרות' })).toBeVisible()
 
@@ -47,7 +47,7 @@ test.describe('Settings hub', () => {
     await factory.seedFamilyWithChild(user, { childName: 'נועה' })
 
     await signIn(page, user)
-    await page.getByRole('button', { name: 'הגדרות' }).click()
+    await openFromHeaderMenu(page, 'הגדרות')
     await expect(page).toHaveURL(/\/settings$/)
 
     await page.getByRole('button', { name: 'התנתקות' }).click()

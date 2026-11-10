@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { formatLongDayLabel } from '../../src/features/compare/compareDate'
 import { expect, test } from '../support/fixtures'
-import { signIn } from '../support/pageActions'
+import { openFromHeaderMenu, signIn } from '../support/pageActions'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -31,10 +31,10 @@ function atLocalHour(dateString: string, hour: number): string {
 /** Backdates the child ten days (from `FIXED_NOW`) so several past days are selectable. */
 const CHILD_CREATED_AT = new Date(FIXED_NOW.getTime() - 10 * DAY_MS).toISOString()
 
-/** Opens the Day-comparison screen the way a user does: the Today header's compare icon. */
+/** Opens the Day-comparison screen the way a user does: the Today header menu. */
 async function openCompare(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/today$/)
-  await page.getByRole('button', { name: 'השוואת ימים' }).click()
+  await openFromHeaderMenu(page, 'השוואת ימים')
   await expect(page).toHaveURL(/\/compare$/)
 }
 
@@ -128,7 +128,7 @@ test.describe('Day comparison screen', () => {
 
     await page.getByRole('button', { name: 'חזרה' }).click()
     await expect(page).toHaveURL(/\/today$/)
-    await expect(page.getByRole('button', { name: 'השוואת ימים' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'תפריט' })).toBeVisible()
   })
 
   test('deselecting every day shows the empty prompt instead of rows', async ({ page, factory }) => {

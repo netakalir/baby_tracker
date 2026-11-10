@@ -1,5 +1,5 @@
 import { expect, test } from '../support/fixtures'
-import { signIn } from '../support/pageActions'
+import { openFromHeaderMenu, signIn } from '../support/pageActions'
 
 test.describe('authentication and onboarding', () => {
   test('a new user signs in and completes onboarding to the Today screen', async ({
@@ -29,9 +29,9 @@ test.describe('authentication and onboarding', () => {
     await expect(page.getByRole('heading', { name: 'נועה' })).toBeVisible()
     await expect(page.getByRole('img', { name: 'שעון 24 שעות של אירועי היום' })).toBeVisible()
 
-    // Sign-out lives in the Settings hub (reached from the Today header gear) and
+    // Sign-out lives in the Settings hub (reached from the Today header menu) and
     // returns to the auth screen.
-    await page.getByRole('button', { name: 'הגדרות' }).click()
+    await openFromHeaderMenu(page, 'הגדרות')
     await expect(page).toHaveURL(/\/settings$/)
     await page.getByRole('button', { name: 'התנתקות' }).click()
     await expect(page).toHaveURL(/\/auth$/)
