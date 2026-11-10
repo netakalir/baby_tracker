@@ -5,6 +5,7 @@ import {
   useId,
   useRef,
   useState,
+  type FocusEvent,
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
@@ -80,8 +81,14 @@ function Separator() {
 export const WeatherStrip = memo(function WeatherStrip() {
   const panelId = useId()
   const stripButtonRef = useRef<HTMLButtonElement>(null)
-  // The strip + its popover. A pointer down outside it closes the popover.
+  // The strip + its popover. A pointer down outside it, or focus leaving it,
+  // closes the popover.
   const containerRef = useRef<HTMLElement>(null)
+  // True from a pointer press inside the container until that pointer is
+  // released. Safari (and iOS) don't focus a button on click, so pressing a
+  // search result blurs the field with no focus target - that must not be
+  // read as "focus left the popover" before the click lands.
+  const isPointerDownInsideRef = useRef(false)
   const { location, chooseCity, locateDevice, cancelLocateDevice, isLocatingDevice } =
     useWeatherLocation()
   const coordinates = location.status === 'ready' ? location.coordinates : null
@@ -105,22 +112,38 @@ export const WeatherStrip = memo(function WeatherStrip() {
     (location.status === 'ready' && weatherQuery.isPending && !isOffline)
 
   /**
-   * Closes the panel. If focus is inside it (a search result, an action, the
-   * search field), focus moves back to the strip button *before* the panel
-   * unmounts, so it never falls back to <body>. Focus elsewhere (e.g. after an
-   * outside tap) is left alone. Closing also abandons a pending "use my
-   * location", so its late result can neither switch the location nor pull
-   * focus back here. Stable: every dependency is a ref, a setter or stable.
+   * Closes the panel, and abandons a pending "use my location" so its late
+   * result can neither switch the location nor pull focus back here.
+   *
+   * Focus: if it is inside the container when this runs (a search result, an
+   * action, the search field), it moves to the strip button *before* the panel
+   * unmounts, so it never falls back to <body>; if it is already outside (focus
+   * left via Tab - see `handleBlur`), it is left alone. An outside tap runs this
+   * from `pointerdown`, which fires BEFORE the browser moves focus: so focus is
+   * typically still inside, briefly lands on the strip button, and the
+   * browser's default mousedown handling then moves it to the tapped element
+   * (or to <body> for a non-focusable spot).
+   *
+   * `focusStrip: true` always returns focus to the strip - for an explicit
+   * action taken inside the panel (choosing a city, a successful "use my
+   * location"), including in Safari, where clicking a button leaves focus on
+   * <body> rather than inside the panel. Stable: every dependency is a ref, a
+   * setter or itself stable.
    */
-  const closePanel = useCallback((): void => {
-    cancelLocateDevice()
-    if (containerRef.current?.contains(document.activeElement)) {
-      stripButtonRef.current?.focus()
-    }
-    setIsOpen(false)
-    setMode('details')
-    setTapFailure(null)
-  }, [cancelLocateDevice])
+  const closePanel = useCallback(
+    ({ focusStrip = false }: { focusStrip?: boolean } = {}): void => {
+      cancelLocateDevice()
+      const isFocusInside = containerRef.current?.contains(document.activeElement) ?? false
+      const isFocusNowhere = document.activeElement === null || document.activeElement === document.body
+      if (isFocusInside || (focusStrip && isFocusNowhere)) {
+        stripButtonRef.current?.focus()
+      }
+      setIsOpen(false)
+      setMode('details')
+      setTapFailure(null)
+    },
+    [cancelLocateDevice],
+  )
 
   // Dismiss the popover when the parent taps anywhere outside it - the same
   // pattern as the quick-log menus. A tap on the strip itself stays inside the
@@ -156,7 +179,7 @@ export const WeatherStrip = memo(function WeatherStrip() {
 
   const handleChooseCity = (city: SavedCity): void => {
     chooseCity(city)
-    closePanel()
+    closePanel({ focusStrip: true })
   }
 
   const handleUseDeviceLocation = async (): Promise<void> => {
@@ -167,7 +190,7 @@ export const WeatherStrip = memo(function WeatherStrip() {
     if (result === null) return
     // Success switches the strip to the device location; a failure keeps the
     // panel open, with everything unchanged, and explains why.
-    if (result.status === 'located') closePanel()
+    if (result.status === 'located') closePanel({ focusStrip: true })
     else setTapFailure(result.status)
   }
 
@@ -176,6 +199,43 @@ export const WeatherStrip = memo(function WeatherStrip() {
 
   const handleKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
     if (event.key === 'Escape' && isOpen) closePanel()
+  }
+
+  const handlePointerDownInside = (): void => {
+    isPointerDownInsideRef.current = true
+    const release = (): void => {
+      isPointerDownInsideRef.current = false
+      window.removeEventListener('pointerup', release, true)
+      window.removeEventListener('pointercancel', release, true)
+    }
+    window.addEventListener('pointerup', release, true)
+    window.addEventListener('pointercancel', release, true)
+  }
+
+  /**
+   * Closes the popover when keyboard focus leaves the strip + popover (e.g.
+   * Shift+Tab to the header), so it can't sit open over another menu. It never
+   * moves focus: by the time this runs focus is already outside, and
+   * `closePanel` only restores focus that is inside.
+   *
+   * Not a close: focus moving within the container; a pointer press inside
+   * (Safari's no-focus-on-click blurs with no target before the click lands);
+   * and a focused element inside being replaced (e.g. "החלף עיר" unmounting as
+   * the search field auto-focuses) - which is why a missing/outside target is
+   * re-checked after the DOM settles rather than acted on at once.
+   */
+  const handleBlur = (event: FocusEvent<HTMLElement>): void => {
+    if (!isOpen) return
+    const next = event.relatedTarget
+    if (next instanceof Node && containerRef.current?.contains(next)) return
+    if (isPointerDownInsideRef.current) return
+
+    requestAnimationFrame(() => {
+      const container = containerRef.current
+      if (!container || container.contains(document.activeElement)) return
+      if (isPointerDownInsideRef.current) return
+      closePanel()
+    })
   }
 
   let content: ReactNode
@@ -223,6 +283,8 @@ export const WeatherStrip = memo(function WeatherStrip() {
       ref={containerRef}
       aria-label={REGION_LABEL}
       onKeyDown={handleKeyDown}
+      onBlur={handleBlur}
+      onPointerDown={handlePointerDownInside}
       className="relative"
     >
       {/* One stable button across every state (loading included), so focus
