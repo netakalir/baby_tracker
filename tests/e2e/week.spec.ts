@@ -1,5 +1,5 @@
 import { expect, test } from '../support/fixtures'
-import { signIn } from '../support/pageActions'
+import { openFromHeaderMenu, signIn } from '../support/pageActions'
 
 const HOUR_MS = 60 * 60 * 1000
 
@@ -20,7 +20,7 @@ function hoursAgo(hours: number): string {
 
 async function openWeek(page: import('@playwright/test').Page): Promise<void> {
   await expect(page).toHaveURL(/\/today$/)
-  await page.getByRole('button', { name: 'שבוע' }).click()
+  await openFromHeaderMenu(page, 'שבוע')
   await expect(page).toHaveURL(/\/week$/)
 }
 

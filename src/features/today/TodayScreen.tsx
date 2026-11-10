@@ -8,6 +8,7 @@ import { isRunningTimerEvent } from './api'
 import { ClockLegend } from './ClockLegend'
 import { DayClock } from './DayClock'
 import { EstimateBanners } from './EstimateBanners'
+import { HeaderMenu } from './HeaderMenu'
 import { HistoricalDayView } from './HistoricalDayView'
 import { resolveTodayMode } from './historicalDate'
 import { QuickLogButtons } from './QuickLogButtons'
@@ -27,81 +28,55 @@ const headerDateFormatter = new Intl.DateTimeFormat('he-IL', {
 interface TodayHeaderProps {
   childName: string
   onOpenWeek: () => void
+  onOpenCompare: () => void
   onOpenSettings: () => void
 }
 
 /**
  * Top app bar: the date on the start side, and a child "pill" (avatar + name) on
  * the end side - the entry point for the multi-child switcher (a later slice, so
- * for now it is a static identity). A week-chart icon and a settings gear sit as
- * compact icons at the edge, pushing the Week screen and the Settings hub.
+ * for now it is a static identity). A single menu button at the edge opens the
+ * navigation to the Week screen, Day comparison and the Settings hub.
+ *
+ * Fits down to 320px without horizontal overflow. The date truncates first:
+ * it takes only the space the pill and menu button leave, with an ellipsis. The
+ * child name is shown in full up to its `max-w-28` cap (a very long name still
+ * truncates at the cap). Only if the date is already down to its small
+ * `min-w-12` floor (e.g. a large root font size) does the name shrink further,
+ * so the header never overflows horizontally.
  */
 const TodayHeader = memo(function TodayHeader({
   childName,
   onOpenWeek,
+  onOpenCompare,
   onOpenSettings,
 }: TodayHeaderProps) {
   return (
     <header className="flex items-center justify-between gap-3">
-      <div className="min-w-0">
+      <div className="min-w-12 flex-1">
         <p className="truncate text-lg font-semibold text-neutral-900">
           {headerDateFormatter.format(new Date())}
         </p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <div className="flex items-center gap-2 rounded-full border border-neutral-200 bg-neutral-0 py-1 pe-2 ps-3 shadow-sm">
-          <h1 className="max-w-28 truncate text-sm font-medium text-neutral-800">
+      <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2 rounded-full border border-neutral-200 bg-neutral-0 py-1 pe-2 ps-3 shadow-sm">
+          <h1 className="min-w-0 max-w-28 truncate text-sm font-medium text-neutral-800">
             {childName}
           </h1>
           <span
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-50 text-base"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 text-base"
             aria-hidden="true"
           >
             👶
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={onOpenWeek}
-          aria-label="שבוע"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-colors duration-fast hover:bg-neutral-100 hover:text-neutral-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-        >
-          <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
-            <path
-              d="M4 20V10M10 20V4M16 20v-7M4 20h16"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          aria-label="הגדרות"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-colors duration-fast hover:bg-neutral-100 hover:text-neutral-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-        >
-          <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
-            <path
-              d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
+        <HeaderMenu
+          onOpenWeek={onOpenWeek}
+          onOpenCompare={onOpenCompare}
+          onOpenSettings={onOpenSettings}
+        />
       </div>
     </header>
   )
@@ -113,6 +88,7 @@ interface TodayContentProps {
   /** The child's day boundary ('HH:MM', default '00:00'), scoping "today". */
   dayStart: string
   onOpenWeek: () => void
+  onOpenCompare: () => void
   onOpenSettings: () => void
 }
 
@@ -121,7 +97,14 @@ interface TodayContentProps {
  * fed by the child's events, a color legend, the estimate rows, and the sticky
  * quick-log bar. Split out so `useTodayEvents` only mounts once we have a child.
  */
-function TodayContent({ childId, childName, dayStart, onOpenWeek, onOpenSettings }: TodayContentProps) {
+function TodayContent({
+  childId,
+  childName,
+  dayStart,
+  onOpenWeek,
+  onOpenCompare,
+  onOpenSettings,
+}: TodayContentProps) {
   const today = new Date()
   const displayUnit = useDisplayUnit()
   const { data: events, isError, error } = useTodayEvents(childId, dayStart)
@@ -141,7 +124,12 @@ function TodayContent({ childId, childName, dayStart, onOpenWeek, onOpenSettings
 
   return (
     <>
-      <TodayHeader childName={childName} onOpenWeek={onOpenWeek} onOpenSettings={onOpenSettings} />
+      <TodayHeader
+        childName={childName}
+        onOpenWeek={onOpenWeek}
+        onOpenCompare={onOpenCompare}
+        onOpenSettings={onOpenSettings}
+      />
 
       {isError && (
         <div className="mt-4">
@@ -202,6 +190,7 @@ export function TodayScreen() {
               childName={child.name}
               dayStart={child.day_start}
               onOpenWeek={() => navigate('/week')}
+              onOpenCompare={() => navigate('/compare')}
               onOpenSettings={() => navigate('/settings')}
             />
           )

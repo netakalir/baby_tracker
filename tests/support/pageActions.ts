@@ -19,3 +19,15 @@ export async function signIn(
   // session restore (a bare goto otherwise bounces back to /auth).
   await page.waitForURL((url) => !url.pathname.startsWith('/auth'))
 }
+
+/** The Today header's navigation destinations, by their menu-item label. */
+export type HeaderMenuItem = 'שבוע' | 'השוואת ימים' | 'הגדרות'
+
+/**
+ * Navigates from the Today header through its hamburger menu: opens the menu
+ * ("תפריט") and taps the named item.
+ */
+export async function openFromHeaderMenu(page: Page, item: HeaderMenuItem): Promise<void> {
+  await page.getByRole('button', { name: 'תפריט' }).click()
+  await page.getByRole('menu', { name: 'תפריט' }).getByRole('menuitem', { name: item }).click()
+}

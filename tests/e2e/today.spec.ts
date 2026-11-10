@@ -1,6 +1,6 @@
 import { deviceDayBounds } from '../../src/features/today/todayDate'
 import { expect, test } from '../support/fixtures'
-import { signIn } from '../support/pageActions'
+import { openFromHeaderMenu, signIn } from '../support/pageActions'
 
 test.describe('Today screen - quick logging', () => {
   test('an empty day shows the empty-state clock until an event is logged', async ({
@@ -162,6 +162,100 @@ test.describe('Today screen - quick-log menus (dismiss & fit)', () => {
     expect(box).not.toBeNull()
     expect(box!.x).toBeGreaterThanOrEqual(-1)
     expect(box!.x + box!.width).toBeLessThanOrEqual(375 + 1)
+  })
+
+  test('at 320px the child name shows in full and the date truncates instead', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    // A typical short name: it must not be truncated; the date gives way.
+    await factory.seedFamilyWithChild(user, { childName: 'טליה' })
+
+    await page.setViewportSize({ width: 320, height: 720 })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    const header = page.locator('header').first()
+
+    // The name is not truncated (no hidden overflow beyond rounding).
+    const name = page.getByRole('heading', { name: 'טליה' })
+    await expect(name).toBeVisible()
+    const nameTruncated = await name.evaluate((element) => element.scrollWidth > element.clientWidth + 1)
+    expect(nameTruncated).toBe(false)
+
+    // The date (full form, with the weekday) keeps a real visible width.
+    const date = header.locator('p').first()
+    await expect(date).toBeVisible()
+    await expect(date).toContainText(/יום/)
+    const dateBox = await date.boundingBox()
+    expect(dateBox).not.toBeNull()
+    expect(dateBox!.width).toBeGreaterThanOrEqual(40)
+
+    // The menu button sits fully within the screen.
+    const menuBox = await page.getByRole('button', { name: 'תפריט' }).boundingBox()
+    expect(menuBox).not.toBeNull()
+    expect(menuBox!.x).toBeGreaterThanOrEqual(-1)
+    expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(320 + 1)
+
+    // Nothing overflows: not the header, not the page.
+    expect(await header.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false)
+    const pageOverflows = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    )
+    expect(pageOverflows).toBe(false)
+  })
+
+  test('at 320px a very long child name never makes the header overflow', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    // Long enough to hit the name's cap and truncate there.
+    await factory.seedFamilyWithChild(user, { childName: 'אלכסנדרה-מרגריטה' })
+
+    await page.setViewportSize({ width: 320, height: 720 })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    const header = page.locator('header').first()
+    await expect(header.locator('p').first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'אלכסנדרה-מרגריטה' })).toBeVisible()
+
+    expect(await header.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false)
+    const pageOverflows = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    )
+    expect(pageOverflows).toBe(false)
+  })
+
+  test('the header menu opens inside a 320px screen', async ({ page, factory }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'אלכסנדרה-מרגריטה' })
+
+    await page.setViewportSize({ width: 320, height: 720 })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    await page.getByRole('button', { name: 'תפריט' }).click()
+    const menu = page.getByRole('menu', { name: 'תפריט' })
+    await expect(menu).toBeVisible()
+
+    const box = await menu.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.x).toBeGreaterThanOrEqual(-1)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(320 + 1)
+
+    // Sized to its content (not a wide fixed panel), with touch-sized items.
+    expect(box!.width).toBeLessThanOrEqual(200)
+    for (const item of await menu.getByRole('menuitem').all()) {
+      const itemBox = await item.boundingBox()
+      expect(itemBox).not.toBeNull()
+      expect(itemBox!.height).toBeGreaterThanOrEqual(40)
+    }
   })
 
   test('the quick-log bar fits within a very narrow (320px) phone screen', async ({
@@ -501,5 +595,74 @@ test.describe('Today screen - per-child day boundary (day_start)', () => {
     // The in-window mood renders; the pre-boundary diaper is scoped out entirely.
     await expect(page.getByRole('img', { name: /מצב רוח בשעה/ })).toBeVisible()
     await expect(page.getByRole('img', { name: /החתלה/ })).toHaveCount(0)
+  })
+})
+
+test.describe('Today screen - header menu', () => {
+  test('the menu opens and closes by outside tap and Escape, and each item navigates', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'ליאור' })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    const trigger = page.getByRole('button', { name: 'תפריט' })
+    const menu = page.getByRole('menu', { name: 'תפריט' })
+    await expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+
+    // Open-state feedback: the hamburger's lines rotate vertical only while the
+    // menu is open. Tailwind's `rotate-90` sets the CSS `rotate` property; polled
+    // so the brief transition can settle.
+    const triggerIconRotate = () =>
+      trigger.locator('svg').evaluate((element) => getComputedStyle(element).rotate)
+    await expect.poll(triggerIconRotate).toBe('none')
+
+    // The menu floats over the page: opening it must not push the clock down.
+    const clock = page.getByRole('img', { name: 'שעון 24 שעות של אירועי היום' })
+    const clockBefore = await clock.boundingBox()
+    expect(clockBefore).not.toBeNull()
+
+    // Opening moves focus to the first item.
+    await trigger.click()
+    await expect(menu).toBeVisible()
+    const clockAfter = await clock.boundingBox()
+    expect(clockAfter).not.toBeNull()
+    expect(clockAfter!.y).toBe(clockBefore!.y)
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    await expect.poll(triggerIconRotate).toBe('90deg')
+    await expect(menu.getByRole('menuitem', { name: 'שבוע' })).toBeFocused()
+
+    // Arrow keys move between items.
+    await page.keyboard.press('ArrowDown')
+    await expect(menu.getByRole('menuitem', { name: 'השוואת ימים' })).toBeFocused()
+
+    // A tap outside the menu (on the empty page margin) closes it.
+    await page.mouse.click(5, 600)
+    await expect(menu).toBeHidden()
+
+    // Escape closes it and returns focus to the trigger.
+    await trigger.click()
+    await expect(menu).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(menu).toBeHidden()
+    await expect(trigger).toBeFocused()
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    await expect.poll(triggerIconRotate).toBe('none')
+
+    // Each item navigates to its screen.
+    const destinations = [
+      { item: 'שבוע', url: /\/week$/ },
+      { item: 'השוואת ימים', url: /\/compare$/ },
+      { item: 'הגדרות', url: /\/settings$/ },
+    ] as const
+    for (const { item, url } of destinations) {
+      await page.goto('/today')
+      await openFromHeaderMenu(page, item)
+      await expect(page).toHaveURL(url)
+    }
   })
 })
