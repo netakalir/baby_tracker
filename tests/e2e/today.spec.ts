@@ -164,13 +164,13 @@ test.describe('Today screen - quick-log menus (dismiss & fit)', () => {
     expect(box!.x + box!.width).toBeLessThanOrEqual(375 + 1)
   })
 
-  test('the header keeps the full child name and a visible date on a 320px screen', async ({
+  test('at 320px the child name shows in full and the date truncates instead', async ({
     page,
     factory,
   }) => {
     const user = await factory.createUser()
-    // A long name: the pill must keep it readable; the date is what truncates.
-    await factory.seedFamilyWithChild(user, { childName: 'אלכסנדרה-מרגריטה' })
+    // A typical short name: it must not be truncated; the date gives way.
+    await factory.seedFamilyWithChild(user, { childName: 'טליה' })
 
     await page.setViewportSize({ width: 320, height: 720 })
 
@@ -179,14 +179,13 @@ test.describe('Today screen - quick-log menus (dismiss & fit)', () => {
 
     const header = page.locator('header').first()
 
-    // The child name is shown at a real width, not squeezed to an ellipsis.
-    const name = page.getByRole('heading', { name: 'אלכסנדרה-מרגריטה' })
+    // The name is not truncated (no hidden overflow beyond rounding).
+    const name = page.getByRole('heading', { name: 'טליה' })
     await expect(name).toBeVisible()
-    const nameBox = await name.boundingBox()
-    expect(nameBox).not.toBeNull()
-    expect(nameBox!.width).toBeGreaterThanOrEqual(60)
+    const nameTruncated = await name.evaluate((element) => element.scrollWidth > element.clientWidth + 1)
+    expect(nameTruncated).toBe(false)
 
-    // The date (full form, with the weekday) stays visible, possibly truncated.
+    // The date (full form, with the weekday) keeps a real visible width.
     const date = header.locator('p').first()
     await expect(date).toBeVisible()
     await expect(date).toContainText(/יום/)
@@ -201,6 +200,30 @@ test.describe('Today screen - quick-log menus (dismiss & fit)', () => {
     expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(320 + 1)
 
     // Nothing overflows: not the header, not the page.
+    expect(await header.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false)
+    const pageOverflows = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    )
+    expect(pageOverflows).toBe(false)
+  })
+
+  test('at 320px a very long child name never makes the header overflow', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    // Long enough to hit the name's cap and truncate there.
+    await factory.seedFamilyWithChild(user, { childName: 'אלכסנדרה-מרגריטה' })
+
+    await page.setViewportSize({ width: 320, height: 720 })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    const header = page.locator('header').first()
+    await expect(header.locator('p').first()).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'אלכסנדרה-מרגריטה' })).toBeVisible()
+
     expect(await header.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false)
     const pageOverflows = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
@@ -225,6 +248,14 @@ test.describe('Today screen - quick-log menus (dismiss & fit)', () => {
     expect(box).not.toBeNull()
     expect(box!.x).toBeGreaterThanOrEqual(-1)
     expect(box!.x + box!.width).toBeLessThanOrEqual(320 + 1)
+
+    // Sized to its content (not a wide fixed panel), with touch-sized items.
+    expect(box!.width).toBeLessThanOrEqual(200)
+    for (const item of await menu.getByRole('menuitem').all()) {
+      const itemBox = await item.boundingBox()
+      expect(itemBox).not.toBeNull()
+      expect(itemBox!.height).toBeGreaterThanOrEqual(40)
+    }
   })
 
   test('the quick-log bar fits within a very narrow (320px) phone screen', async ({
