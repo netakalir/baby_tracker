@@ -123,7 +123,8 @@ export function HeaderMenu({ onOpenWeek, onOpenCompare, onOpenSettings }: Header
         break
       case 'ArrowUp':
         event.preventDefault()
-        focusAt(current - 1)
+        // From the panel itself (no item focused) ArrowUp goes to the last item.
+        focusAt(current === -1 ? elements.length - 1 : current - 1)
         break
       case 'Home':
         event.preventDefault()
