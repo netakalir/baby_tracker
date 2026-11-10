@@ -207,9 +207,14 @@ export const WeatherStrip = memo(function WeatherStrip() {
       isPointerDownInsideRef.current = false
       window.removeEventListener('pointerup', release, true)
       window.removeEventListener('pointercancel', release, true)
+      window.removeEventListener('contextmenu', release, true)
     }
     window.addEventListener('pointerup', release, true)
     window.addEventListener('pointercancel', release, true)
+    // A macOS right-click (or long-press menu) may never deliver `pointerup`
+    // to the page; without this the flag would stick and a later Tab-out
+    // would not close the popover.
+    window.addEventListener('contextmenu', release, true)
   }
 
   /**

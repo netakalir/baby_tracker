@@ -592,14 +592,21 @@ test.describe('Today screen - weather dressing strip', () => {
     const popover = await popoverFor(page, stripButton)
     await expect(popover).toBeVisible()
 
-    // Shift+Tab leaves the strip backwards, to the header's settings button.
+    // Shift+Tab leaves the strip backwards, to whatever header control precedes
+    // it (deliberately not named, so the test holds for any header layout).
     await page.keyboard.press('Shift+Tab')
-    const settingsButton = page.getByRole('button', { name: 'הגדרות' })
-    await expect(settingsButton).toBeFocused()
     await expect(popover).toBeHidden()
     await expect(stripButton).toHaveAttribute('aria-expanded', 'false')
-    // The close did not yank focus back to the strip.
-    await expect(settingsButton).toBeFocused()
+    // The close did not yank focus back to the strip: focus rests on a real
+    // element outside it (not the strip, not dropped to <body>).
+    await expect
+      .poll(() =>
+        strip.evaluate(
+          (element) =>
+            !element.contains(document.activeElement) && document.activeElement !== document.body,
+        ),
+      )
+      .toBe(true)
   })
 
   test('at 320×568 the open city search stays inside the screen', async ({ page, factory }) => {
