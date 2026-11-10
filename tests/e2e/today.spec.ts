@@ -614,6 +614,13 @@ test.describe('Today screen - header menu', () => {
     await expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
     await expect(trigger).toHaveAttribute('aria-expanded', 'false')
 
+    // Open-state feedback: the hamburger's lines rotate vertical only while the
+    // menu is open. Tailwind's `rotate-90` sets the CSS `rotate` property; polled
+    // so the brief transition can settle.
+    const triggerIconRotate = () =>
+      trigger.locator('svg').evaluate((element) => getComputedStyle(element).rotate)
+    await expect.poll(triggerIconRotate).toBe('none')
+
     // The menu floats over the page: opening it must not push the clock down.
     const clock = page.getByRole('img', { name: 'שעון 24 שעות של אירועי היום' })
     const clockBefore = await clock.boundingBox()
@@ -626,6 +633,7 @@ test.describe('Today screen - header menu', () => {
     expect(clockAfter).not.toBeNull()
     expect(clockAfter!.y).toBe(clockBefore!.y)
     await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    await expect.poll(triggerIconRotate).toBe('90deg')
     await expect(menu.getByRole('menuitem', { name: 'שבוע' })).toBeFocused()
 
     // Arrow keys move between items.
@@ -642,6 +650,8 @@ test.describe('Today screen - header menu', () => {
     await page.keyboard.press('Escape')
     await expect(menu).toBeHidden()
     await expect(trigger).toBeFocused()
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    await expect.poll(triggerIconRotate).toBe('none')
 
     // Each item navigates to its screen.
     const destinations = [

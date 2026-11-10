@@ -157,7 +157,16 @@ export function HeaderMenu({ onOpenWeek, onOpenCompare, onOpenSettings }: Header
         aria-controls={isOpen ? menuId : undefined}
         className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-400 transition-colors duration-fast hover:bg-neutral-100 hover:text-neutral-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
       >
-        <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
+        {/* Open-state feedback: the three lines turn vertical while the menu is
+            open (a brief rotate, skipped under reduced motion). */}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          className={`h-5 w-5 transition-transform duration-fast ease-out motion-reduce:transition-none ${
+            isOpen ? 'rotate-90' : ''
+          }`}
+          aria-hidden="true"
+        >
           <path d="M4 7h16M4 12h16M4 17h16" {...STROKE} />
         </svg>
       </button>
