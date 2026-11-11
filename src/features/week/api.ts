@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabase'
 import type { Event } from '../../types/database'
+import { overlapsWindowFilter } from '../today/api'
 import { weekBounds } from './weekDate'
 
 /**
@@ -12,8 +13,9 @@ import { weekBounds } from './weekDate'
  * an event that crosses a day boundary — e.g. an overnight sleep — is still
  * returned so its duration can be split across the days it touches. An event
  * overlaps `[startIso, endIso)` when it starts before the window ends and either
- * ends after the window starts (duration events) or, for a point-in-time event
- * (no `end_time`), starts within the window.
+ * ends after the window starts (duration events), is a timer still running, or,
+ * for a point-in-time event (no `end_time`), starts within the window. The rule
+ * is shared via {@link overlapsWindowFilter}.
  */
 export async function fetchWeekEvents(
   childId: string,
@@ -27,7 +29,7 @@ export async function fetchWeekEvents(
     .select('*')
     .eq('child_id', childId)
     .lt('start_time', endIso)
-    .or(`end_time.gt.${startIso},and(end_time.is.null,start_time.gte.${startIso})`)
+    .or(overlapsWindowFilter(startIso))
     .order('start_time', { ascending: true })
     .returns<Event[]>()
 

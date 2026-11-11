@@ -59,6 +59,12 @@ export interface TestFactory {
    * second parent in the family so cross-device / realtime paths can be tested.
    */
   addMember(user: TestUser, familyId: string): Promise<void>
+  /**
+   * Counts the child's running (no `end_time`) events of `type`, read AS the
+   * given user (through RLS). Lets a test assert what the database holds, not
+   * just what one screen shows.
+   */
+  countRunningEvents(user: TestUser, childId: string, type: Event['type']): Promise<number>
 }
 
 export interface SeedEvent {
@@ -189,6 +195,18 @@ export const test = base.extend<{ factory: TestFactory }>({
         const client = await clientFor(user)
         const { error } = await client.rpc('join_family_by_token', { p_token: invite.token })
         if (error) throw error
+      },
+
+      async countRunningEvents(user, childId, type) {
+        const client = await clientFor(user)
+        const { count, error } = await client
+          .from('events')
+          .select('id', { count: 'exact', head: true })
+          .eq('child_id', childId)
+          .eq('type', type)
+          .is('end_time', null)
+        if (error) throw error
+        return count ?? 0
       },
     }
 

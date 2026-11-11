@@ -7,6 +7,8 @@ import {
   startTimerEvent,
   stopTimerEvent,
   type ImmediateEventType,
+  type StartTimerResult,
+  type StopTimerResult,
   type TimerEventType,
 } from './api'
 import { deviceDayKey } from './todayDate'
@@ -94,12 +96,18 @@ export function useLogImmediateEvent(childId: string) {
 
 /**
  * Starts a start/stop timer event (sleep / feeding) and refetches the child's
- * "today" list so the new running arc appears immediately.
+ * "today" list so the new running arc appears immediately. When the other
+ * parent started the same timer first, the result is `already-running` and the
+ * refetch picks up their timer instead.
  */
 export function useStartTimerEvent(childId: string) {
   const queryClient = useQueryClient()
 
-  return useMutation<Event, unknown, { type: TimerEventType; metadata?: Record<string, unknown> }>({
+  return useMutation<
+    StartTimerResult,
+    unknown,
+    { type: TimerEventType; metadata?: Record<string, unknown> }
+  >({
     mutationFn: ({ type, metadata }) => startTimerEvent(childId, type, metadata),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: todayEventsKeyPrefix(childId) })
@@ -109,12 +117,14 @@ export function useStartTimerEvent(childId: string) {
 
 /**
  * Stops a running timer event by its id and refetches the child's "today" list
- * so the arc updates from "in progress" to a completed, capped duration.
+ * so the arc updates from "in progress" to a completed, capped duration. When
+ * the other parent already stopped it, the result is `already-stopped` and the
+ * refetch shows their stop.
  */
 export function useStopTimerEvent(childId: string) {
   const queryClient = useQueryClient()
 
-  return useMutation<Event, unknown, { eventId: string; metadata?: Record<string, unknown> }>({
+  return useMutation<StopTimerResult, unknown, { eventId: string; metadata?: Record<string, unknown> }>({
     mutationFn: ({ eventId, metadata }) => stopTimerEvent(eventId, metadata),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: todayEventsKeyPrefix(childId) })

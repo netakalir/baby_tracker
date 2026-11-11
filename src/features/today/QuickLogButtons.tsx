@@ -2,7 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Banner } from '../../components/ui/Banner'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
 import type { Event, EventType } from '../../types/database'
-import { isRunningTimerEvent, type ImmediateEventType, type TimerEventType } from './api'
+import {
+  isRunningTimerEvent,
+  type ImmediateEventType,
+  type StopTimerResult,
+  type TimerEventType,
+} from './api'
 import { eventColor } from './clock/eventColors'
 import { getFeedingType } from './eventMetadata'
 import {
@@ -48,6 +53,38 @@ const LOGGED_LABELS: Record<EventType, string> = {
   feeding: 'נרשמה האכלה',
   diaper: 'נרשם החתלה',
   mood: 'נרשם מצב רוח',
+}
+
+/**
+ * Shown when a start tap lost a race with the other parent's device: their
+ * timer was already running, so this tap joined it instead of opening another.
+ */
+const ALREADY_RUNNING_LABELS: Record<TimerEventType, string> = {
+  sleep: 'השינה כבר התחילה במכשיר אחר',
+  feeding: 'ההאכלה כבר התחילה במכשיר אחר',
+}
+
+/**
+ * Shown when a stop tap lost a race with the other parent's device: the timer
+ * had already been stopped there, so nothing changed here.
+ */
+const ALREADY_STOPPED_LABELS: Record<TimerEventType, string> = {
+  sleep: 'השינה כבר נעצרה במכשיר אחר',
+  feeding: 'ההאכלה כבר נעצרה במכשיר אחר',
+}
+
+/**
+ * A short-lived status pill above the buttons. `success` confirms this tap was
+ * recorded; `info` explains that the other parent's device got there first.
+ */
+interface StatusNotice {
+  message: string
+  tone: 'success' | 'info'
+}
+
+const NOTICE_TONE_CLASSES: Record<StatusNotice['tone'], string> = {
+  success: 'bg-success-500 text-on-accent',
+  info: 'border border-brand-300 bg-brand-50 text-brand-700',
 }
 
 /**
@@ -302,7 +339,7 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
   const [isMoodOpen, setIsMoodOpen] = useState(false)
   const [isFeedingOpen, setIsFeedingOpen] = useState(false)
   const [isAmountOpen, setIsAmountOpen] = useState(false)
-  const [confirmedType, setConfirmedType] = useState<EventType | null>(null)
+  const [notice, setNotice] = useState<StatusNotice | null>(null)
   const confirmationTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Wrappers for the two buttons that own a popup menu. A pointer down outside
   // both dismisses any open menu (below); a tap on the button itself or a menu
@@ -311,7 +348,9 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
   const moodMenuWrapper = useRef<HTMLDivElement>(null)
 
   // The single running timer per type (if any). The UI toggles a button to
-  // "stop" while its type is active, which is what enforces one-active-per-type.
+  // "stop" while its type is active; the database guarantees there is never a
+  // second one (a unique index on running sleep/feeding timers per child), even
+  // when both parents tap "start" at the same moment.
   const activeTimers = useMemo(() => {
     const byType = new Map<TimerEventType, Event>()
     // Historical (disabled) mode never shows a running timer: a past day has no
@@ -356,14 +395,30 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
     return () => document.removeEventListener('pointerdown', handlePointerDown)
   }, [isAnyMenuOpen])
 
-  function showConfirmation(type: EventType) {
-    setConfirmedType(type)
+  function showNotice(next: StatusNotice) {
+    setNotice(next)
     if (confirmationTimeout.current) {
       clearTimeout(confirmationTimeout.current)
     }
     confirmationTimeout.current = setTimeout(() => {
-      setConfirmedType(null)
+      setNotice(null)
     }, CONFIRMATION_DURATION_MS)
+  }
+
+  function showConfirmation(type: EventType) {
+    showNotice({ message: LOGGED_LABELS[type], tone: 'success' })
+  }
+
+  /**
+   * Reports a timer stop: a confirmation when this tap stopped it, or a note
+   * when the other parent's device had already stopped it.
+   */
+  function showStopResult(type: TimerEventType, result: StopTimerResult) {
+    if (result.outcome === 'already-stopped') {
+      showNotice({ message: ALREADY_STOPPED_LABELS[type], tone: 'info' })
+      return
+    }
+    showConfirmation(type)
   }
 
   function handleLog(type: ImmediateEventType, metadata?: Record<string, unknown>) {
@@ -381,7 +436,16 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
   }
 
   function handleStartTimer(type: TimerEventType, metadata?: Record<string, unknown>) {
-    startTimerMutation.mutate({ type, metadata })
+    startTimerMutation.mutate(
+      { type, metadata },
+      {
+        onSuccess: (result) => {
+          if (result.outcome === 'already-running') {
+            showNotice({ message: ALREADY_RUNNING_LABELS[type], tone: 'info' })
+          }
+        },
+      },
+    )
   }
 
   function handleFeedingSelect(choice: FeedingChoice) {
@@ -391,7 +455,7 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
   }
 
   function handleStopTimer(type: TimerEventType, eventId: string) {
-    stopTimerMutation.mutate({ eventId }, { onSuccess: () => showConfirmation(type) })
+    stopTimerMutation.mutate({ eventId }, { onSuccess: (result) => showStopResult(type, result) })
   }
 
   const feedingEvent = activeTimers.get('feeding')
@@ -435,7 +499,7 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
 
     stopTimerMutation.mutate(
       { eventId: feedingEvent.id, metadata },
-      { onSuccess: () => showConfirmation('feeding') },
+      { onSuccess: (result) => showStopResult('feeding', result) },
     )
   }
 
@@ -452,12 +516,12 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
       <div className="pointer-events-auto mx-auto max-w-sm space-y-3">
         {isError && <Banner message={toFriendlyDbErrorMessage(mutationError)} variant="error" />}
 
-        {confirmedType && (
+        {notice && (
           <div
             role="status"
-            className="rounded-full bg-success-500 px-4 py-2 text-center text-sm font-medium text-on-accent shadow-sm"
+            className={`rounded-full px-4 py-2 text-center text-sm font-medium shadow-sm ${NOTICE_TONE_CLASSES[notice.tone]}`}
           >
-            {LOGGED_LABELS[confirmedType]}
+            {notice.message}
           </div>
         )}
 
