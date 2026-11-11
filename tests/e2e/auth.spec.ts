@@ -29,6 +29,17 @@ test.describe('authentication and onboarding', () => {
     await expect(page.getByRole('heading', { name: 'נועה' })).toBeVisible()
     await expect(page.getByRole('img', { name: 'שעון 24 שעות של אירועי היום' })).toBeVisible()
 
+    // Finishing onboarding starts the app tour once; skipping it frees the page.
+    const tour = page.getByRole('dialog', { name: 'ברוכים הבאים 👋' })
+    await expect(tour).toBeVisible()
+    await tour.getByRole('button', { name: 'דלג' }).click()
+    await expect(tour).toBeHidden()
+
+    // The start signal is consumed: a reload does not replay the tour.
+    await page.reload()
+    await expect(page.getByRole('heading', { name: 'נועה' })).toBeVisible()
+    await expect(page.getByRole('dialog')).toBeHidden()
+
     // Sign-out lives in the Settings hub (reached from the Today header menu) and
     // returns to the auth screen.
     await openFromHeaderMenu(page, 'הגדרות')

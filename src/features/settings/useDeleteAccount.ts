@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
+import { clearTourRequest } from '../tour/tourStart'
 import { deleteAccount } from './api'
 
 /**
@@ -16,6 +17,7 @@ export function useDeleteAccount() {
     onSuccess: async () => {
       await supabase.auth.signOut()
       queryClient.clear()
+      clearTourRequest()
     },
   })
 }

@@ -4,6 +4,7 @@ interface HeaderMenuProps {
   onOpenWeek: () => void
   onOpenCompare: () => void
   onOpenSettings: () => void
+  onStartTour: () => void
 }
 
 interface MenuItem {
@@ -54,9 +55,18 @@ function SettingsIcon() {
   )
 }
 
+/** App tour: a signpost - the tour points the way around the screen. */
+function TourIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 shrink-0" aria-hidden="true">
+      <path d="M12 21V3M5 5h11l3 3-3 3H5V5ZM12 14H7l-2 2 2 2h5" {...STROKE} />
+    </svg>
+  )
+}
+
 /**
  * The Today header's navigation menu: one hamburger button that opens a small
- * dropdown with Week, Day comparison and Settings. Follows the app's popup-menu
+ * dropdown with Week, Day comparison, Settings and the app tour. Follows the app's popup-menu
  * pattern (see QuickLogButtons): a pointer down outside dismisses it, and it
  * opens with no animation — only the items' brief tap feedback.
  *
@@ -69,7 +79,12 @@ function SettingsIcon() {
  * the panel itself, which is focusable (`tabIndex={-1}`), so a tap on its
  * padding keeps focus in the menu and Escape still works from there.
  */
-export function HeaderMenu({ onOpenWeek, onOpenCompare, onOpenSettings }: HeaderMenuProps) {
+export function HeaderMenu({
+  onOpenWeek,
+  onOpenCompare,
+  onOpenSettings,
+  onStartTour,
+}: HeaderMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -80,6 +95,7 @@ export function HeaderMenu({ onOpenWeek, onOpenCompare, onOpenSettings }: Header
     { id: 'week', label: 'שבוע', icon: <WeekIcon />, onSelect: onOpenWeek },
     { id: 'compare', label: 'השוואת ימים', icon: <CompareIcon />, onSelect: onOpenCompare },
     { id: 'settings', label: 'הגדרות', icon: <SettingsIcon />, onSelect: onOpenSettings },
+    { id: 'tour', label: 'סיור באפליקציה', icon: <TourIcon />, onSelect: onStartTour },
   ]
 
   // Move focus into the menu as it opens, and dismiss it on a pointer down
@@ -141,7 +157,9 @@ export function HeaderMenu({ onOpenWeek, onOpenCompare, onOpenSettings }: Header
   }
 
   function handleSelect(item: MenuItem) {
-    setIsOpen(false)
+    // Focus goes back to the trigger first, so whatever the item opens (e.g. the
+    // app tour) finds a focusable element to return focus to when it closes.
+    closeAndRefocus()
     item.onSelect()
   }
 
@@ -185,7 +203,7 @@ export function HeaderMenu({ onOpenWeek, onOpenCompare, onOpenSettings }: Header
           // the header, the content below it, or the clock down.
           // Layering: z-30 keeps the menu above the weather popover (z-20) and the quick-log bar (z-10).
           // `w-max`: the panel is exactly as wide as its longest item
-          // ("השוואת ימים" + icon, ~150px), never a fixed width.
+          // ("סיור באפליקציה" + icon, ~170px), never a fixed width.
           className="absolute end-0 top-full z-30 mt-2 flex w-max flex-col items-stretch gap-1 rounded-lg border border-neutral-200 bg-neutral-0 p-2 shadow-md focus:outline-none"
         >
           {items.map((item) => (
