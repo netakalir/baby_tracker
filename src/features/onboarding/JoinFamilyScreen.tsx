@@ -8,6 +8,7 @@ import { FormError } from '../../components/ui/FormError'
 import { Input } from '../../components/ui/Input'
 import { Label } from '../../components/ui/Label'
 import { useAuth } from '../auth/useAuth'
+import { requestTourOnArrival } from '../tour/tourStart'
 import { JoinFamilyError, joinFamilyByToken, type JoinFamilyErrorCode } from './api'
 import { joinFamilySchema } from './schemas'
 
@@ -35,6 +36,9 @@ export function JoinFamilyScreen() {
   const mutation = useMutation({
     mutationFn: (input: { token: string }) => joinFamilyByToken(input),
     onSuccess: async () => {
+      // First arrival on Today: start the app tour once (see tourStart). Raised
+      // before the refetch, which can itself redirect to Today via the guard.
+      requestTourOnArrival()
       await queryClient.invalidateQueries({ queryKey: ['onboarding-status', user!.id] })
       navigate('/today')
     },

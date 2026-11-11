@@ -30,6 +30,7 @@ Implemented as Tailwind v4 `@theme` CSS variables in `src/index.css`. Reference 
 - Brand (primary actions, links, focus rings): `brand-50/100/300/500/600/700` - a muted indigo-violet (`#5b5bd6` at 500). `600` is the hover/active shade.
 - Neutrals (warm gray, not pure gray): `neutral-0/50/100/200/400/600/800/900` - backgrounds, borders, body/secondary text.
 - Semantic: `error-50` (background)/`error-500` (text/border) for validation and blocking errors; `success-500` for confirmations.
+- Scrim: `scrim` - the dimming layer behind a modal-level surface (currently only the app tour). `rgba(28, 25, 23, 0.55)` in light, `rgba(0, 0, 0, 0.65)` in dark. Use `bg-scrim` for a full-screen dim, or `var(--color-scrim)` in a spread shadow to cut out a highlighted element. Never for ordinary popovers or menus.
 - Event-type colors (defined once with the Today screen; one consistent color per type, reused everywhere - clock arcs, quick-log buttons, future charts/legends - never reused across types):
   - `sleep-50/300/500` - blue (`#2563eb` at 500): night/rest. A true blue, kept distinct from the indigo-violet brand color.
   - `feeding-50/300/500` - orange (`#f97316` at 500): milk/warmth.
@@ -49,6 +50,9 @@ Implemented as Tailwind v4 `@theme` CSS variables in `src/index.css`. Reference 
 
 **Motion**
 - `duration-fast` (150ms) - button/tap feedback. `duration-base` (200ms) - the clock's single entrance animation. Never exceed `duration-base`.
+
+**Layering (z-index)**
+- One fixed ladder, so floating layers never fight: `z-10` sticky quick-log bar → `z-20` weather popover → `z-30` header menu → `z-40` modal-level overlay (the app tour, with the scrim). Do not introduce values outside this ladder.
 
 **Elevation**
 - Soft, warm-tinted shadows for surfaces that float above the page. `shadow-sm` - resting cards/panels. `shadow-md` - the sticky quick-log bar and any raised popover. `shadow-lg` - reserved for the clock hero / modal-level surfaces. Elevation is functional (it separates layers), never decorative - keep it subtle. Do not stack shadows or use hard/dark drop shadows.

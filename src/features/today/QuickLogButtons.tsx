@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Banner } from '../../components/ui/Banner'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
+import { tourAnchor } from '../tour/tourSteps'
 import type { Event, EventType } from '../../types/database'
 import { isRunningTimerEvent, type ImmediateEventType, type TimerEventType } from './api'
 import { eventColor } from './clock/eventColors'
@@ -461,7 +462,7 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
           </div>
         )}
 
-        <div className="flex items-start justify-center gap-3">
+        <div {...tourAnchor('quick-log')} className="flex items-start justify-center gap-3">
           <div ref={feedingMenuWrapper} className="relative flex min-w-0 flex-1 flex-col items-center">
             {isFeedingOpen && <FeedingChoiceMenu disabled={isPending} onSelect={handleFeedingSelect} />}
             {isAmountOpen && (
