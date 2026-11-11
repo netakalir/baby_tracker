@@ -30,6 +30,9 @@ test.describe('family sharing', () => {
     await expect(page).toHaveURL(/\/today$/)
     await expect(page.getByRole('heading', { name: family.childName })).toBeVisible()
 
+    // A newly joined parent is new to the app too: the tour starts for them.
+    await expect(page.getByRole('dialog', { name: 'ברוכים הבאים 👋' })).toBeVisible()
+
     // API: B can now read the shared child directly (they are a real member).
     const clientB = createClient(testEnv.supabaseUrl, testEnv.supabaseAnonKey, {
       auth: { autoRefreshToken: false, persistSession: false },

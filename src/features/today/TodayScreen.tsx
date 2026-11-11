@@ -1,9 +1,12 @@
-import { memo, useMemo } from 'react'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Banner } from '../../components/ui/Banner'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
 import { useOnboardingStatus } from '../onboarding/useOnboardingStatus'
+import { AppTour } from '../tour/AppTour'
+import { clearTourRequest, isTourRequested } from '../tour/tourStart'
+import { tourAnchor } from '../tour/tourSteps'
 import { WeatherStrip } from '../weather/WeatherStrip'
 import { isRunningTimerEvent } from './api'
 import { ClockLegend } from './ClockLegend'
@@ -31,13 +34,15 @@ interface TodayHeaderProps {
   onOpenWeek: () => void
   onOpenCompare: () => void
   onOpenSettings: () => void
+  onStartTour: () => void
 }
 
 /**
  * Top app bar: the date on the start side, and a child "pill" (avatar + name) on
  * the end side - the entry point for the multi-child switcher (a later slice, so
  * for now it is a static identity). A single menu button at the edge opens the
- * navigation to the Week screen, Day comparison and the Settings hub.
+ * navigation to the Week screen, Day comparison, the Settings hub and the app
+ * tour.
  *
  * Fits down to 320px without horizontal overflow. The date truncates first:
  * it takes only the space the pill and menu button leave, with an ellipsis. The
@@ -51,6 +56,7 @@ const TodayHeader = memo(function TodayHeader({
   onOpenWeek,
   onOpenCompare,
   onOpenSettings,
+  onStartTour,
 }: TodayHeaderProps) {
   return (
     <header className="flex items-center justify-between gap-3">
@@ -73,11 +79,14 @@ const TodayHeader = memo(function TodayHeader({
           </span>
         </div>
 
-        <HeaderMenu
-          onOpenWeek={onOpenWeek}
-          onOpenCompare={onOpenCompare}
-          onOpenSettings={onOpenSettings}
-        />
+        <div {...tourAnchor('menu')} className="shrink-0">
+          <HeaderMenu
+            onOpenWeek={onOpenWeek}
+            onOpenCompare={onOpenCompare}
+            onOpenSettings={onOpenSettings}
+            onStartTour={onStartTour}
+          />
+        </div>
       </div>
     </header>
   )
@@ -98,6 +107,10 @@ interface TodayContentProps {
  * (live view only - never on a historical day), the 24-hour clock (hero)
  * fed by the child's events, a color legend, the estimate rows, and the sticky
  * quick-log bar. Split out so `useTodayEvents` only mounts once we have a child.
+ *
+ * It also hosts the app tour, which points at the regions marked with
+ * `tourAnchor`. The tour starts on its own once, when onboarding requested it
+ * (see tourStart), and any time from the header menu.
  */
 function TodayContent({
   childId,
@@ -124,6 +137,13 @@ function TodayContent({
   )
   const now = useNowTick(hasRunningTimer)
 
+  const [isTourOpen, setIsTourOpen] = useState(isTourRequested)
+  // Consume the onboarding request on arrival, so it starts the tour only once.
+  useEffect(() => clearTourRequest(), [])
+
+  const startTour = useCallback(() => setIsTourOpen(true), [])
+  const closeTour = useCallback(() => setIsTourOpen(false), [])
+
   return (
     <>
       <TodayHeader
@@ -131,9 +151,10 @@ function TodayContent({
         onOpenWeek={onOpenWeek}
         onOpenCompare={onOpenCompare}
         onOpenSettings={onOpenSettings}
+        onStartTour={startTour}
       />
 
-      <div className="mt-3">
+      <div {...tourAnchor('weather')} className="mt-3">
         <WeatherStrip />
       </div>
 
@@ -143,7 +164,7 @@ function TodayContent({
         </div>
       )}
 
-      <section className="mt-6 flex flex-col items-center gap-4">
+      <section {...tourAnchor('clock')} className="mt-6 flex flex-col items-center gap-4">
         <DayClock
           events={events ?? []}
           date={today}
@@ -154,11 +175,13 @@ function TodayContent({
         <ClockLegend />
       </section>
 
-      <div className="mt-6">
+      <div {...tourAnchor('estimates')} className="mt-6">
         <EstimateBanners childId={childId} dayStart={dayStart} />
       </div>
 
       <QuickLogButtons childId={childId} events={events ?? []} now={now} />
+
+      {isTourOpen && <AppTour onClose={closeTour} />}
     </>
   )
 }
