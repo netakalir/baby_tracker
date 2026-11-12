@@ -187,7 +187,7 @@ export function HistoricalDayView({
 
       {/* Disabled on a past day: the buttons are inert and show no live
           stopwatch, so `now` is never read — a static value suffices. */}
-      <QuickLogButtons childId={childId} events={events ?? []} now={0} disabled />
+      <QuickLogButtons childId={childId} dayStart={dayStart} events={events ?? []} now={0} disabled />
     </>
   )
 }

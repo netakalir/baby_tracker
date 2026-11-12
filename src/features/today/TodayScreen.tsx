@@ -158,7 +158,7 @@ function TodayContent({
         <EstimateBanners childId={childId} dayStart={dayStart} />
       </div>
 
-      <QuickLogButtons childId={childId} events={events ?? []} now={now} />
+      <QuickLogButtons childId={childId} dayStart={dayStart} events={events ?? []} now={now} />
     </>
   )
 }

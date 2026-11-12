@@ -27,6 +27,11 @@ import { useLogImmediateEvent, useStartTimerEvent, useStopTimerEvent } from './u
 
 interface QuickLogButtonsProps {
   childId: string
+  /**
+   * The child's day boundary ('HH:MM'). Identifies the live "today" cache entry
+   * a log is written into, so the screen updates without waiting for a refetch.
+   */
+  dayStart: string
   /** The child's events for today, used to detect which timers are running. */
   events: Event[]
   /**
@@ -331,10 +336,16 @@ function FeedingAmountMenu({ disabled, displayUnit, onSelect }: FeedingAmountMen
   )
 }
 
-export function QuickLogButtons({ childId, events, now, disabled = false }: QuickLogButtonsProps) {
-  const logMutation = useLogImmediateEvent(childId)
-  const startTimerMutation = useStartTimerEvent(childId)
-  const stopTimerMutation = useStopTimerEvent(childId)
+export function QuickLogButtons({
+  childId,
+  dayStart,
+  events,
+  now,
+  disabled = false,
+}: QuickLogButtonsProps) {
+  const logMutation = useLogImmediateEvent(childId, dayStart)
+  const startTimerMutation = useStartTimerEvent(childId, dayStart)
+  const stopTimerMutation = useStopTimerEvent(childId, dayStart)
   const displayUnit = useDisplayUnit()
   const [isMoodOpen, setIsMoodOpen] = useState(false)
   const [isFeedingOpen, setIsFeedingOpen] = useState(false)
