@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Child } from '../../types/database'
 import { useAuth } from '../auth/useAuth'
-import { createPracticeChild, deleteOwnPracticeChildren } from './practiceChild'
+import { createPracticeChild, deleteOwnPracticeChildren, deletePracticeChild } from './practiceChild'
 import { clearTourRequest, isTourRequested } from './tourStart'
 
 /**
@@ -42,6 +42,8 @@ export function usePracticeTour(realChild: Child | null): PracticeTour {
   // failed cleanup is retried on the next tour start or app session. A mutation
   // started from an unmount cleanup still runs to completion.
   const { mutate: cleanUp } = useMutation({ mutationFn: deleteOwnPracticeChildren })
+  // For an abandoned tour: removes just that tour's child, never a newer one.
+  const { mutate: discard } = useMutation({ mutationFn: deletePracticeChild })
 
   const { mutate: create, isPending: isStarting, isError: hasStartFailed } = useMutation({
     mutationFn: (input: { child: Child; ownerId: string }) =>
@@ -51,11 +53,11 @@ export function usePracticeTour(realChild: Child | null): PracticeTour {
         birthDate: input.child.birth_date,
         dayStart: input.child.day_start,
       }),
-    onSuccess: (child, { ownerId }) => {
+    onSuccess: (child) => {
       // Today was left while the practice child was being created: nobody will
       // end this tour, so remove the child straight away.
       if (!isMountedRef.current) {
-        cleanUp(ownerId)
+        discard(child.id)
         return
       }
       practiceChildRef.current = child
@@ -82,12 +84,12 @@ export function usePracticeTour(realChild: Child | null): PracticeTour {
     return () => {
       isMountedRef.current = false
       const leftover = practiceChildRef.current
-      if (leftover?.demo_owner_id) {
+      if (leftover) {
         practiceChildRef.current = null
-        cleanUp(leftover.demo_owner_id)
+        discard(leftover.id)
       }
     }
-  }, [cleanUp])
+  }, [discard])
 
   useEffect(() => {
     if (!userId || !realChild) return

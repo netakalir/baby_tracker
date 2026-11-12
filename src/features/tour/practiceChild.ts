@@ -34,6 +34,21 @@ export async function deleteOwnPracticeChildren(ownerId: string): Promise<void> 
   if (error) throw error
 }
 
+/**
+ * Removes one specific practice child. Used where a tour is abandoned, so a
+ * newer tour started meanwhile keeps its own practice child. RLS lets a user
+ * delete only their own practice child; the filter on `demo_owner_id` also
+ * guarantees this can never touch a real child.
+ */
+export async function deletePracticeChild(childId: string): Promise<void> {
+  const { error } = await supabase
+    .from('children')
+    .delete()
+    .eq('id', childId)
+    .not('demo_owner_id', 'is', null)
+  if (error) throw error
+}
+
 /** Creates a fresh practice child, replacing any left over from an earlier tour. */
 export async function createPracticeChild(input: CreatePracticeChildInput): Promise<Child> {
   await deleteOwnPracticeChildren(input.ownerId)
