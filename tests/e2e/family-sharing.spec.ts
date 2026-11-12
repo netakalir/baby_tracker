@@ -26,12 +26,13 @@ test.describe('family sharing', () => {
     await expect(page.locator('#token')).toHaveValue(token)
     await page.locator('button[type="submit"]').click()
 
-    // B now lands on Today and sees A's child - the data is shared.
+    // B now lands on Today. A newly joined parent is new to the app too, so the
+    // tour starts for them; closing it shows A's child - the data is shared.
     await expect(page).toHaveURL(/\/today$/)
+    await expect(page.getByRole('dialog', { name: 'בואו ננסה 👋' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toBeHidden()
     await expect(page.getByRole('heading', { name: family.childName })).toBeVisible()
-
-    // A newly joined parent is new to the app too: the tour starts for them.
-    await expect(page.getByRole('dialog', { name: 'ברוכים הבאים 👋' })).toBeVisible()
 
     // API: B can now read the shared child directly (they are a real member).
     const clientB = createClient(testEnv.supabaseUrl, testEnv.supabaseAnonKey, {

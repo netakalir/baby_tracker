@@ -28,6 +28,8 @@ async function fetchOnboardingState(userId: string): Promise<OnboardingState> {
     .from('children')
     .select('*')
     .eq('family_id', membership.family_id)
+    // The app tour's practice child is never the family's child.
+    .is('demo_owner_id', null)
     .order('created_at', { ascending: true })
     .limit(1)
 

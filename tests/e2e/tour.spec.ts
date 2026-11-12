@@ -1,23 +1,33 @@
+import type { Page } from '@playwright/test'
+import { adminClient } from '../support/adminClient'
 import { expect, test } from '../support/fixtures'
 import { openFromHeaderMenu, signIn } from '../support/pageActions'
 
-/** Titles of the tour's steps, in order (see src/features/tour/tourSteps.ts). */
-const STEP_TITLES = [
-  'ברוכים הבאים 👋',
-  'השעון היומי',
-  'רישום בנגיעה אחת',
-  'ההאכלה והשינה הבאות',
-  'מזג אוויר והלבשה',
-  'עוד מסכים',
-] as const
+/** The empty-day caption: proves the real child's clock got no practice events. */
+const EMPTY_DAY_CAPTION = 'עדיין אין נתונים היום - לחץ על אחד הכפתורים כדי להתחיל'
 
-test.describe('app tour', () => {
-  test('the tour can be started from the header menu and walked to the end', async ({
+/** The tour's popover, by its current step title. */
+function tourStep(page: Page, title: string) {
+  return page.getByRole('dialog', { name: title })
+}
+
+/** Counts the user's practice children, bypassing RLS. */
+async function countPracticeChildren(ownerId: string): Promise<number> {
+  const { count, error } = await adminClient
+    .from('children')
+    .select('id', { count: 'exact', head: true })
+    .eq('demo_owner_id', ownerId)
+  if (error) throw error
+  return count ?? 0
+}
+
+test.describe('interactive app tour', () => {
+  test('the parent practises every action on a practice child, which is deleted at the end', async ({
     page,
     factory,
   }) => {
     const user = await factory.createUser()
-    await factory.seedFamilyWithChild(user, { childName: 'אורי' })
+    const family = await factory.seedFamilyWithChild(user, { childName: 'אורי' })
 
     await signIn(page, user)
     await expect(page).toHaveURL(/\/today$/)
@@ -26,38 +36,76 @@ test.describe('app tour', () => {
     await expect(page.getByRole('dialog')).toBeHidden()
 
     await openFromHeaderMenu(page, 'סיור באפליקציה')
-    const dialog = page.getByRole('dialog')
 
-    for (const [index, title] of STEP_TITLES.entries()) {
-      await expect(dialog).toHaveAccessibleName(title)
-      await expect(dialog.getByText(`${index + 1} מתוך ${STEP_TITLES.length}`)).toBeVisible()
-      if (index < STEP_TITLES.length - 1) {
-        await dialog.getByRole('button', { name: 'הבא' }).click()
-      }
-    }
+    // The screen switches to the practice child.
+    const welcome = tourStep(page, 'בואו ננסה 👋')
+    await expect(welcome).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'תינוק תרגול' })).toBeVisible()
+    await expect(page.getByText('מצב תרגול')).toBeVisible()
+    await welcome.getByRole('button', { name: 'הבא' }).click()
 
-    // Back goes one step back; the last step ends with "סיום".
-    await dialog.getByRole('button', { name: 'הקודם' }).click()
-    await expect(dialog).toHaveAccessibleName(STEP_TITLES[STEP_TITLES.length - 2])
-    await dialog.getByRole('button', { name: 'הבא' }).click()
-    await dialog.getByRole('button', { name: 'סיום' }).click()
-    await expect(dialog).toBeHidden()
-
-    // The page is usable again once the tour is over.
+    // Action step: no "הבא" - only doing the action moves on.
+    const diaper = tourStep(page, 'רשמו החתלה')
+    await expect(diaper).toBeVisible()
+    await expect(diaper.getByRole('button', { name: 'הבא' })).toHaveCount(0)
     await page.getByRole('button', { name: 'רישום החתלה' }).click()
-    await expect(page.getByRole('status')).toHaveText('נרשם החתלה')
+
+    const clock = tourStep(page, 'הנה זה על השעון')
+    await expect(clock).toBeVisible()
+    await expect(page.getByRole('img', { name: /החתלה בשעה/ })).toBeVisible()
+    await clock.getByRole('button', { name: 'הבא' }).click()
+
+    await expect(tourStep(page, 'התחילו שינה')).toBeVisible()
+    await page.getByRole('button', { name: 'התחלת שינה' }).click()
+
+    await expect(tourStep(page, 'עכשיו עצרו אותה')).toBeVisible()
+    await page.getByRole('button', { name: 'עצירת שינה' }).click()
+
+    await expect(tourStep(page, 'איך מרגיש התינוק?')).toBeVisible()
+    await page.getByRole('button', { name: 'רישום מצב רוח' }).click()
+
+    await expect(tourStep(page, 'בחרו מצב רוח')).toBeVisible()
+    await page.getByRole('menu', { name: 'בחירת מצב רוח' }).getByRole('menuitem').first().click()
+
+    const estimates = tourStep(page, 'ההאכלה והשינה הבאות')
+    await expect(estimates).toBeVisible()
+    await estimates.getByRole('button', { name: 'הבא' }).click()
+
+    const menu = tourStep(page, 'עוד מסכים')
+    await expect(menu).toBeVisible()
+    await menu.getByRole('button', { name: 'סיום' }).click()
+
+    // Back on the real child, whose day is untouched by the practice.
+    await expect(page.getByRole('dialog')).toBeHidden()
+    await expect(page.getByRole('heading', { name: family.childName })).toBeVisible()
+    await expect(page.getByText('מצב תרגול')).toBeHidden()
+    await expect(page.getByText(EMPTY_DAY_CAPTION)).toBeVisible()
+
+    // The practice child (and, by cascade, its events) is gone.
+    await expect.poll(() => countPracticeChildren(user.id)).toBe(0)
   })
 
-  test('Escape closes the tour', async ({ page, factory }) => {
+  test('skipping midway with Escape also returns to the real child and cleans up', async ({
+    page,
+    factory,
+  }) => {
     const user = await factory.createUser()
-    await factory.seedFamilyWithChild(user, { childName: 'מיה' })
+    const family = await factory.seedFamilyWithChild(user, { childName: 'מיה' })
 
     await signIn(page, user)
     await openFromHeaderMenu(page, 'סיור באפליקציה')
 
-    const dialog = page.getByRole('dialog')
-    await expect(dialog).toHaveAccessibleName(STEP_TITLES[0])
+    const welcome = tourStep(page, 'בואו ננסה 👋')
+    await welcome.getByRole('button', { name: 'הבא' }).click()
+    await expect(tourStep(page, 'רשמו החתלה')).toBeVisible()
+    await page.getByRole('button', { name: 'רישום החתלה' }).click()
+    await expect(tourStep(page, 'הנה זה על השעון')).toBeVisible()
+
     await page.keyboard.press('Escape')
-    await expect(dialog).toBeHidden()
+
+    await expect(page.getByRole('dialog')).toBeHidden()
+    await expect(page.getByRole('heading', { name: family.childName })).toBeVisible()
+    await expect(page.getByText(EMPTY_DAY_CAPTION)).toBeVisible()
+    await expect.poll(() => countPracticeChildren(user.id)).toBe(0)
   })
 })

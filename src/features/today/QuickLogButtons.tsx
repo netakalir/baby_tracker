@@ -526,7 +526,7 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
           </div>
         )}
 
-        <div {...tourAnchor('quick-log')} className="flex items-start justify-center gap-3">
+        <div className="flex items-start justify-center gap-3">
           <div ref={feedingMenuWrapper} className="relative flex min-w-0 flex-1 flex-col items-center">
             {isFeedingOpen && <FeedingChoiceMenu disabled={isPending} onSelect={handleFeedingSelect} />}
             {isAmountOpen && (
@@ -550,7 +550,7 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
             />
           </div>
 
-          <div className="flex min-w-0 flex-1 flex-col items-center">
+          <div {...tourAnchor('sleep-button')} className="flex min-w-0 flex-1 flex-col items-center">
             <TimerButton
               type="sleep"
               emoji="😴"
@@ -562,7 +562,7 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
             />
           </div>
 
-          <div className="flex min-w-0 flex-1 flex-col items-center">
+          <div {...tourAnchor('diaper-button')} className="flex min-w-0 flex-1 flex-col items-center">
             <QuickLogButton
               label="החתלה"
               ariaLabel="רישום החתלה"
@@ -575,9 +575,14 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
             </QuickLogButton>
           </div>
 
-          <div ref={moodMenuWrapper} className="relative flex min-w-0 flex-1 flex-col items-center">
+          <div
+            ref={moodMenuWrapper}
+            {...tourAnchor('mood-button')}
+            className="relative flex min-w-0 flex-1 flex-col items-center"
+          >
             {isMoodOpen && (
               <div
+                {...tourAnchor('mood-menu')}
                 role="menu"
                 aria-label="בחירת מצב רוח"
                 // Left-anchored (the mood button is the leftmost in the bar) so

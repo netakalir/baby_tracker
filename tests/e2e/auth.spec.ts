@@ -24,16 +24,17 @@ test.describe('authentication and onboarding', () => {
     await page.locator('#birthDate').fill('2026-03-01')
     await page.locator('button[type="submit"]').click()
 
-    // Onboarding complete -> Today screen shows the child and the 24-hour clock.
+    // Onboarding complete -> Today. Finishing onboarding starts the app tour
+    // once (on a practice child); skipping it returns to the real child.
     await expect(page).toHaveURL(/\/today$/)
+    const tour = page.getByRole('dialog', { name: 'בואו ננסה 👋' })
+    await expect(tour).toBeVisible()
+    await tour.getByRole('button', { name: 'דלג על הסיור' }).click()
+    await expect(tour).toBeHidden()
+
+    // Today shows the real child and the 24-hour clock.
     await expect(page.getByRole('heading', { name: 'נועה' })).toBeVisible()
     await expect(page.getByRole('img', { name: 'שעון 24 שעות של אירועי היום' })).toBeVisible()
-
-    // Finishing onboarding starts the app tour once; skipping it frees the page.
-    const tour = page.getByRole('dialog', { name: 'ברוכים הבאים 👋' })
-    await expect(tour).toBeVisible()
-    await tour.getByRole('button', { name: 'דלג' }).click()
-    await expect(tour).toBeHidden()
 
     // The start signal is consumed: a reload does not replay the tour.
     await page.reload()
