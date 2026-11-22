@@ -1,7 +1,9 @@
 import type { Page } from '@playwright/test'
-import { adminClient } from '../support/adminClient'
-import { expect, test } from '../support/fixtures'
+import { createClient } from '@supabase/supabase-js'
+import { cachedSession } from '../support/authSessions'
+import { expect, test, type TestUser } from '../support/fixtures'
 import { openFromHeaderMenu, signIn } from '../support/pageActions'
+import { testEnv } from '../support/testEnv'
 
 /** The empty-day caption: proves the real child's clock got no practice events. */
 const EMPTY_DAY_CAPTION = 'עדיין אין נתונים היום - לחץ על אחד הכפתורים כדי להתחיל'
@@ -11,12 +13,23 @@ function tourStep(page: Page, title: string) {
   return page.getByRole('dialog', { name: title })
 }
 
-/** Counts the user's practice children, bypassing RLS. */
-async function countPracticeChildren(ownerId: string): Promise<number> {
-  const { count, error } = await adminClient
+/**
+ * Counts the user's practice children, as that user (RLS shows an owner their
+ * own practice children). Reuses the session `signIn` already obtained, so it
+ * costs no extra sign-in request.
+ */
+async function countPracticeChildren(user: TestUser): Promise<number> {
+  const session = cachedSession(user.email)
+  if (!session) throw new Error(`countPracticeChildren: no cached session for ${user.email}`)
+
+  const client = createClient(testEnv.supabaseUrl, testEnv.supabaseAnonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { headers: { Authorization: `Bearer ${session.access_token}` } },
+  })
+  const { count, error } = await client
     .from('children')
     .select('id', { count: 'exact', head: true })
-    .eq('demo_owner_id', ownerId)
+    .eq('demo_owner_id', user.id)
   if (error) throw error
   return count ?? 0
 }
@@ -82,7 +95,7 @@ test.describe('interactive app tour', () => {
     await expect(page.getByText(EMPTY_DAY_CAPTION)).toBeVisible()
 
     // The practice child (and, by cascade, its events) is gone.
-    await expect.poll(() => countPracticeChildren(user.id)).toBe(0)
+    await expect.poll(() => countPracticeChildren(user)).toBe(0)
   })
 
   test('skipping midway with Escape also returns to the real child and cleans up', async ({
@@ -106,6 +119,6 @@ test.describe('interactive app tour', () => {
     await expect(page.getByRole('dialog')).toBeHidden()
     await expect(page.getByRole('heading', { name: family.childName })).toBeVisible()
     await expect(page.getByText(EMPTY_DAY_CAPTION)).toBeVisible()
-    await expect.poll(() => countPracticeChildren(user.id)).toBe(0)
+    await expect.poll(() => countPracticeChildren(user)).toBe(0)
   })
 })
