@@ -63,12 +63,12 @@ export async function signInThroughUi(
   await page.waitForURL((url) => !url.pathname.startsWith('/auth'))
 }
 
-/** The Today header's navigation destinations, by their menu-item label. */
-export type HeaderMenuItem = 'שבוע' | 'השוואת ימים' | 'הגדרות'
+/** The Today header menu's items, by their label. */
+export type HeaderMenuItem = 'שבוע' | 'השוואת ימים' | 'הגדרות' | 'סיור באפליקציה'
 
 /**
- * Navigates from the Today header through its hamburger menu: opens the menu
- * ("תפריט") and taps the named item.
+ * Opens the Today header's hamburger menu ("תפריט") and taps the named item -
+ * a navigation destination, or the app tour.
  */
 export async function openFromHeaderMenu(page: Page, item: HeaderMenuItem): Promise<void> {
   await page.getByRole('button', { name: 'תפריט' }).click()
