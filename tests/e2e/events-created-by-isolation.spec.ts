@@ -1,10 +1,10 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { signInThroughApi } from '../support/authSessions'
 import { expect, test, type TestUser } from '../support/fixtures'
-import { testEnv } from '../support/testEnv'
 
 /**
  * Authorship of an event cannot be spoofed by another member of the SAME
- * family (migration 20261112000000_enforce_events_created_by.sql):
+ * family (migration 20261122000000_enforce_events_created_by.sql):
  * - INSERT: the `created_by = auth.uid()` WITH CHECK rejects a row authored
  *   as the other parent (or as nobody), while an insert that omits
  *   `created_by` is stamped with the caller's id by the column default.
@@ -22,14 +22,7 @@ import { testEnv } from '../support/testEnv'
 const INSUFFICIENT_PRIVILEGE = '42501'
 
 async function authedClient(user: TestUser): Promise<SupabaseClient> {
-  const client = createClient(testEnv.supabaseUrl, testEnv.supabaseAnonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
-  const { error } = await client.auth.signInWithPassword({
-    email: user.email,
-    password: user.password,
-  })
-  expect(error).toBeNull()
+  const { client } = await signInThroughApi(user)
   return client
 }
 
@@ -150,6 +143,119 @@ test.describe('events.created_by cannot be spoofed by another family member', ()
     expect(finalRowError).toBeNull()
     expect(finalRow?.created_by).toBe(parentA.id)
     expect(finalRow?.created_at).toBe(originalCreatedAt)
+
+    await clientA.auth.signOut()
+    await clientB.auth.signOut()
+  })
+
+  test("a parent cannot log on the other parent's practice child, even as themselves", async ({
+    factory,
+  }) => {
+    const parentA = await factory.createUser()
+    const parentB = await factory.createUser()
+    const family = await factory.seedFamilyWithChild(parentA)
+    await factory.addMember(parentB, family.familyId)
+
+    const clientA = await authedClient(parentA)
+    const clientB = await authedClient(parentB)
+
+    const { data: practiceChild, error: practiceChildError } = await clientA
+      .from('children')
+      .insert({
+        family_id: family.familyId,
+        name: `Practice-${Date.now()}`,
+        birth_date: '2026-01-01',
+        demo_owner_id: parentA.id,
+      })
+      .select('id')
+      .single<{ id: string }>()
+    expect(practiceChildError).toBeNull()
+    const practiceChildId = practiceChild!.id
+
+    // --- B is rejected on A's practice child despite an honest created_by ---
+    // Deliberately no `.select()`: RETURNING would apply the SELECT policy, so
+    // a 42501 could come from that read instead of the INSERT WITH CHECK.
+    const { error: bInsertError } = await clientB.from('events').insert({
+      child_id: practiceChildId,
+      type: 'diaper',
+      start_time: new Date().toISOString(),
+      created_by: parentB.id,
+    })
+    expect(bInsertError?.code).toBe(INSUFFICIENT_PRIVILEGE)
+
+    // --- Control: the identical insert on the shared real child succeeds, so
+    //     the rejection above is about the practice child, not B's membership ---
+    const { error: bRealChildError } = await clientB.from('events').insert({
+      child_id: family.childId,
+      type: 'diaper',
+      start_time: new Date().toISOString(),
+      created_by: parentB.id,
+    })
+    expect(bRealChildError).toBeNull()
+
+    // --- A cannot author an event on their own practice child as B ---
+    const { error: aSpoofError } = await clientA.from('events').insert({
+      child_id: practiceChildId,
+      type: 'diaper',
+      start_time: new Date().toISOString(),
+      created_by: parentB.id,
+    })
+    expect(aSpoofError?.code).toBe(INSUFFICIENT_PRIVILEGE)
+
+    // --- The owner can log during the tour, in the shape `startTimerEvent` sends ---
+    const { data: practiceEvent, error: ownerInsertError } = await clientA
+      .from('events')
+      .insert({
+        child_id: practiceChildId,
+        type: 'sleep',
+        start_time: new Date().toISOString(),
+        end_time: null,
+        created_by: parentA.id,
+        metadata: null,
+      })
+      .select('id, created_by')
+      .single<{ id: string; created_by: string }>()
+    expect(ownerInsertError).toBeNull()
+    expect(practiceEvent?.created_by).toBe(parentA.id)
+    const practiceEventId = practiceEvent!.id
+
+    // --- B's stop-timer update matches no row on the practice event ---
+    const { data: bStopped, error: bStopError } = await clientB
+      .from('events')
+      .update({ end_time: new Date().toISOString() })
+      .eq('id', practiceEventId)
+      .select('id')
+    expect(bStopError).toBeNull()
+    expect(bStopped).toEqual([])
+
+    // --- The owner can still stop it under the column-level UPDATE grant ---
+    const { data: ownerStopped, error: ownerStopError } = await clientA
+      .from('events')
+      .update({ end_time: new Date().toISOString(), metadata: { note: 'practice' } })
+      .eq('id', practiceEventId)
+      .is('end_time', null)
+      .select('id, end_time, metadata')
+      .single<{ id: string; end_time: string | null; metadata: Record<string, unknown> }>()
+    expect(ownerStopError).toBeNull()
+    expect(ownerStopped?.end_time).not.toBeNull()
+    expect(ownerStopped?.metadata).toEqual({ note: 'practice' })
+
+    // --- Only the owner's event exists on the practice child ---
+    const { data: practiceEvents, error: practiceEventsError } = await clientA
+      .from('events')
+      .select('id, created_by')
+      .eq('child_id', practiceChildId)
+    expect(practiceEventsError).toBeNull()
+    expect(practiceEvents).toEqual([{ id: practiceEventId, created_by: parentA.id }])
+
+    // The tour's end-of-run sweep removes the practice child and its events.
+    const { data: sweptChildren, error: sweepError } = await clientA
+      .from('children')
+      .delete()
+      .eq('demo_owner_id', parentA.id)
+      .select('id')
+    expect(sweepError).toBeNull()
+    expect(sweptChildren).toEqual([{ id: practiceChildId }])
 
     await clientA.auth.signOut()
     await clientB.auth.signOut()

@@ -7,8 +7,9 @@
 -- overrides it. Two holes followed:
 --
 --   1. INSERT: "members can insert events for their family"
---      (20260910000000_split_children_events_per_command_policies.sql)
---      only checks that child_id belongs to the caller's family. A
+--      (last rewritten by
+--      20261112000000_children_demo_owner_for_app_tour.sql) only
+--      checks that child_id is a child the caller may write to. A
 --      member could insert a row with created_by = the OTHER parent's
 --      id (or null), i.e. log an event in someone else's name.
 --   2. UPDATE: "members can update their family's events" lets a
@@ -30,6 +31,21 @@
 -- passes; accepting null would only let a client create anonymous,
 -- unattributable rows. (Null still legitimately appears later, via
 -- the account-deletion FK below — that path is not an INSERT.)
+--
+-- The practice-child rule is restated on purpose. Recreating a policy
+-- replaces its whole predicate, so this one must carry forward the
+-- `demo_owner_id` condition from the app-tour migration, which keeps
+-- a parent from logging onto the other parent's private practice
+-- child. That migration's gotcha 1 explains why the rule is explicit
+-- rather than inherited from the children SELECT policy: inheritance
+-- would silently stop applying if the subquery ever moved into a
+-- SECURITY DEFINER helper. Any future rewrite of an events policy
+-- must keep this condition too.
+--
+-- Ordering: this migration must run after 20261112000000, which adds
+-- children.demo_owner_id. Its version was moved from 20261112000000
+-- to 20261122000000 because the app-tour migration already holds that
+-- version and is recorded as applied on the test database.
 --
 -- Fix 2 — UPDATE: make id, created_by and created_at non-updatable
 -- for clients with COLUMN-LEVEL privileges: revoke the table-wide
@@ -82,7 +98,11 @@
 -- ============================================================
 
 -- ------------------------------------------------------------
--- 1. INSERT: family check (unchanged) AND author is the caller.
+-- 1. INSERT: family and practice-child checks (unchanged) AND
+--    author is the caller.
+--
+-- `(select auth.uid())` rather than bare auth.uid(): the sub-select
+-- is evaluated once per statement instead of once per row.
 -- ------------------------------------------------------------
 
 drop policy if exists "members can insert events for their family" on events;
@@ -90,9 +110,11 @@ create policy "members can insert events for their family"
   on events for insert
   with check (
     child_id in (
-      select id from children where family_id in (select auth_user_family_ids())
+      select id from children
+      where family_id in (select auth_user_family_ids())
+        and (demo_owner_id is null or demo_owner_id = (select auth.uid()))
     )
-    and created_by = auth.uid()
+    and created_by = (select auth.uid())
   );
 
 -- ------------------------------------------------------------
