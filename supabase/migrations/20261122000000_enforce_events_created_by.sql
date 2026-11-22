@@ -1,6 +1,10 @@
 -- ============================================================
--- Enforce events.created_by: a member can only author events as
--- themselves, and nobody can rewrite authorship afterwards.
+-- Enforce events.created_by: nobody can author an event as another
+-- user, and created_by cannot be updated by clients.
+--
+-- Not a full audit trail: a member may still delete a family event
+-- and insert it again under their own name, because the DELETE
+-- policy does not depend on who authored the event.
 --
 -- The gap: events.created_by defaults to auth.uid(), but a default
 -- is only a suggestion — a client that sends created_by explicitly
@@ -18,11 +22,11 @@
 --
 -- This violates the rls-policy-pattern rule that created_by is set
 -- by the server, never trusted from client input. Nothing in the app
--- relies on either hole: integ's src/features/today/api.ts still
--- sends `created_by: userId` on insert, but userId comes from
--- supabase.auth.getUser() and therefore equals auth.uid(), so those
--- inserts keep passing. The app's only events UPDATE (stopTimerEvent)
--- writes end_time and metadata; nothing upserts events.
+-- relies on either hole: a client insert either sends the caller's
+-- own id as created_by or omits it and takes the auth.uid() column
+-- default, and both satisfy the check. The app's only events UPDATE
+-- (stopTimerEvent) writes end_time and metadata; nothing upserts
+-- events.
 --
 -- ------------------------------------------------------------
 -- Fix 1 — INSERT: add `created_by = (select auth.uid())` to the WITH CHECK.
