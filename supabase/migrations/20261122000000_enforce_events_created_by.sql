@@ -25,7 +25,7 @@
 -- writes end_time and metadata; nothing upserts events.
 --
 -- ------------------------------------------------------------
--- Fix 1 — INSERT: add `created_by = auth.uid()` to the WITH CHECK.
+-- Fix 1 — INSERT: add `created_by = (select auth.uid())` to the WITH CHECK.
 -- Null is deliberately NOT allowed: the column default stamps
 -- auth.uid(), so a legitimate insert that omits created_by always
 -- passes; accepting null would only let a client create anonymous,
