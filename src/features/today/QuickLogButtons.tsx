@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Banner } from '../../components/ui/Banner'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
+import { tourAnchor } from '../tour/tourSteps'
 import type { Event, EventType } from '../../types/database'
 import {
   isRunningTimerEvent,
@@ -549,7 +550,7 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
             />
           </div>
 
-          <div className="flex min-w-0 flex-1 flex-col items-center">
+          <div {...tourAnchor('sleep-button')} className="flex min-w-0 flex-1 flex-col items-center">
             <TimerButton
               type="sleep"
               emoji="😴"
@@ -561,7 +562,7 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
             />
           </div>
 
-          <div className="flex min-w-0 flex-1 flex-col items-center">
+          <div {...tourAnchor('diaper-button')} className="flex min-w-0 flex-1 flex-col items-center">
             <QuickLogButton
               label="החתלה"
               ariaLabel="רישום החתלה"
@@ -574,9 +575,14 @@ export function QuickLogButtons({ childId, events, now, disabled = false }: Quic
             </QuickLogButton>
           </div>
 
-          <div ref={moodMenuWrapper} className="relative flex min-w-0 flex-1 flex-col items-center">
+          <div
+            ref={moodMenuWrapper}
+            {...tourAnchor('mood-button')}
+            className="relative flex min-w-0 flex-1 flex-col items-center"
+          >
             {isMoodOpen && (
               <div
+                {...tourAnchor('mood-menu')}
                 role="menu"
                 aria-label="בחירת מצב רוח"
                 // Left-anchored (the mood button is the leftmost in the bar) so
