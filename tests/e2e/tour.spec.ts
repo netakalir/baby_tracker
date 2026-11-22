@@ -53,6 +53,8 @@ test.describe('interactive app tour', () => {
     // The screen switches to the practice child.
     const welcome = tourStep(page, 'בואו ננסה 👋')
     await expect(welcome).toBeVisible()
+    // The counter sees the practice child, so its later 0 really means "deleted".
+    await expect.poll(() => countPracticeChildren(user)).toBe(1)
     await expect(page.getByRole('heading', { name: 'תינוק תרגול' })).toBeVisible()
     await expect(page.getByText('מצב תרגול')).toBeVisible()
     await welcome.getByRole('button', { name: 'הבא' }).click()
@@ -109,6 +111,8 @@ test.describe('interactive app tour', () => {
     await openFromHeaderMenu(page, 'סיור באפליקציה')
 
     const welcome = tourStep(page, 'בואו ננסה 👋')
+    await expect(welcome).toBeVisible()
+    await expect.poll(() => countPracticeChildren(user)).toBe(1)
     await welcome.getByRole('button', { name: 'הבא' }).click()
     await expect(tourStep(page, 'רשמו החתלה')).toBeVisible()
     await page.getByRole('button', { name: 'רישום החתלה' }).click()
