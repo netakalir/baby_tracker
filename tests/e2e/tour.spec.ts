@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test'
 import { createClient } from '@supabase/supabase-js'
 import { cachedSession } from '../support/authSessions'
 import { expect, test, type TestUser } from '../support/fixtures'
-import { openFromHeaderMenu, signIn } from '../support/pageActions'
+import { holdTodayEventsReads, openFromHeaderMenu, signIn } from '../support/pageActions'
 import { testEnv } from '../support/testEnv'
 
 /** The empty-day caption: proves the real child's clock got no practice events. */
@@ -32,6 +32,37 @@ async function countPracticeChildren(user: TestUser): Promise<number> {
     .eq('demo_owner_id', user.id)
   if (error) throw error
   return count ?? 0
+}
+
+/** Starts the tour and practises up to the step that stops the sleep timer. */
+async function practiseUpToSleepStop(page: Page, user: TestUser): Promise<void> {
+  await signIn(page, user)
+  await openFromHeaderMenu(page, 'סיור באפליקציה')
+
+  const welcome = tourStep(page, 'בואו ננסה 👋')
+  await expect(welcome).toBeVisible()
+  await expect.poll(() => countPracticeChildren(user)).toBe(1)
+  await welcome.getByRole('button', { name: 'הבא' }).click()
+
+  await expect(tourStep(page, 'רשמו החתלה')).toBeVisible()
+  await page.getByRole('button', { name: 'רישום החתלה' }).click()
+
+  const clock = tourStep(page, 'הנה זה על השעון')
+  await expect(clock).toBeVisible()
+  await clock.getByRole('button', { name: 'הבא' }).click()
+
+  await expect(tourStep(page, 'התחילו שינה')).toBeVisible()
+  await page.getByRole('button', { name: 'התחלת שינה' }).click()
+  await expect(tourStep(page, 'עכשיו עצרו אותה')).toBeVisible()
+}
+
+/**
+ * Closes the open mood menu with an outside tap that really reaches it. driver.js
+ * swallows `pointerdown` on its dark overlay, but lets it through on the popover's
+ * own text.
+ */
+async function tapOutsideMoodMenu(page: Page): Promise<void> {
+  await tourStep(page, 'בחרו מצב רוח').getByText('בחירה אחת, וזה נרשם.').click()
 }
 
 test.describe('interactive app tour', () => {
@@ -123,6 +154,76 @@ test.describe('interactive app tour', () => {
     await expect(page.getByRole('dialog')).toBeHidden()
     await expect(page.getByRole('heading', { name: family.childName })).toBeVisible()
     await expect(page.getByText(EMPTY_DAY_CAPTION)).toBeVisible()
+    await expect.poll(() => countPracticeChildren(user)).toBe(0)
+  })
+
+  test('closing the mood menu without choosing steps back to the mood button', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'דניאל' })
+
+    await practiseUpToSleepStop(page, user)
+    await page.getByRole('button', { name: 'עצירת שינה' }).click()
+
+    await expect(tourStep(page, 'איך מרגיש התינוק?')).toBeVisible()
+    await page.getByRole('button', { name: 'רישום מצב רוח' }).click()
+    await expect(tourStep(page, 'בחרו מצב רוח')).toBeVisible()
+
+    await tapOutsideMoodMenu(page)
+
+    await expect(page.getByRole('menu', { name: 'בחירת מצב רוח' })).toBeHidden()
+    await expect(tourStep(page, 'איך מרגיש התינוק?')).toBeVisible()
+    await expect(page.getByRole('img', { name: /מצב רוח בשעה/ })).toHaveCount(0)
+
+    await page.keyboard.press('Escape')
+    await expect.poll(() => countPracticeChildren(user)).toBe(0)
+  })
+
+  test('a mood menu closed during a refetch steps back once the refetch settles', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'גאיה' })
+
+    // No Realtime echo: the held read below is the only refetch in play.
+    await page.routeWebSocket(/\/realtime\/v1\/websocket/, () => {
+      // Intentionally neither connecting to the server nor replying.
+    })
+    await practiseUpToSleepStop(page, user)
+
+    // Stopping the timer writes the cache, which advances the tour, and leaves
+    // its reconciling refetch held in flight.
+    const hold = await holdTodayEventsReads(page)
+    await page.getByRole('button', { name: 'עצירת שינה' }).click()
+    const moodOpen = tourStep(page, 'איך מרגיש התינוק?')
+    await expect(moodOpen).toBeVisible()
+    await expect.poll(hold.heldCount).toBeGreaterThan(0)
+
+    // The confirmation's later removal is a DOM change that would re-check the
+    // tour by itself, so it must be gone before the menu closes.
+    const confirmation = page.getByRole('status')
+    await expect(confirmation).toHaveText('נרשמה שינה')
+    await expect(confirmation).toBeHidden()
+
+    await page.getByRole('button', { name: 'רישום מצב רוח' }).click()
+    const moodPick = tourStep(page, 'בחרו מצב רוח')
+    await expect(moodPick).toBeVisible()
+
+    await tapOutsideMoodMenu(page)
+
+    // In flight, a closed menu may be a choice being saved: no step back yet.
+    await expect(page.getByRole('menu', { name: 'בחירת מצב רוח' })).toBeHidden()
+    await expect(moodPick).toBeVisible()
+
+    // The refetch settles with no change to the events or the DOM; only the
+    // re-check on settling can step the tour back.
+    await hold.release()
+    await expect(moodOpen).toBeVisible()
+
+    await page.keyboard.press('Escape')
     await expect.poll(() => countPracticeChildren(user)).toBe(0)
   })
 })
