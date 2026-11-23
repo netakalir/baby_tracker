@@ -1,0 +1,30 @@
+-- ============================================================
+-- Let the delete-user Edge Function read family memberships.
+--
+-- The bug: delete-user uses the service_role key and starts by reading
+-- the caller's family ids from family_members, so it can sweep orphaned
+-- families after the account is gone. No migration ever granted
+-- service_role access to that table, so every call failed with
+-- "permission denied for table family_members" and no account could be
+-- deleted. The service_role key bypasses RLS, but RLS is checked only
+-- after table privileges: it does not replace a missing GRANT.
+--
+-- Fix: grant SELECT on family_members, and nothing else. That is the
+-- only direct table access the function performs:
+--   - auth.admin.deleteUser goes through the Auth service. The FK
+--     actions it triggers (CASCADE / SET NULL) run as the table owner,
+--     so they need no service_role privilege.
+--   - delete_orphaned_families is SECURITY DEFINER, so its read of
+--     family_members, its delete from families and the resulting
+--     cascades all run as the function's owner. service_role only needs
+--     the EXECUTE already granted in 20260910000001. This relies on the
+--     owner bypassing RLS, so do not enable FORCE ROW LEVEL SECURITY on
+--     families or family_members without revisiting that function.
+--
+-- A grant rather than a new helper RPC: it fixes the already deployed
+-- function with no code change or redeploy.
+--
+-- Idempotent: repeating a GRANT is a no-op.
+-- ============================================================
+
+grant select on family_members to service_role;
