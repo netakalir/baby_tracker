@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.3.0](https://github.com/netakalir/baby_tracker/compare/vite-scaffold-v0.2.0...vite-scaffold-v0.3.0) (2026-11-23)
+
+
+### Features
+
+* release 0.3.0 - interactive tour, timer fixes and event authorship (integ → main) ([aa7dfd0](https://github.com/netakalir/baby_tracker/commit/aa7dfd01b3554fdf7703d92e68d4165981f9f6d0))
+* **tour:** add a guided app tour of the Today screen ([eebf397](https://github.com/netakalir/baby_tracker/commit/eebf397e851436d4fcccb1e907b6e1cd1da87bd6))
+* **tour:** interactive app tour on a practice child ([2279489](https://github.com/netakalir/baby_tracker/commit/2279489081521574578b2246d43f7cacda86f0b1))
+* **tour:** interactive tour on driver.js with a practice child ([ed0ec89](https://github.com/netakalir/baby_tracker/commit/ed0ec8923792d135b001450bf5d0e405f8e4242d))
+
+
+### Bug Fixes
+
+* **db:** enforce events.created_by authorship in RLS and grants ([e296243](https://github.com/netakalir/baby_tracker/commit/e296243b346197184f2eb3532b61e01a47d1974a))
+* **db:** enforce events.created_by authorship in RLS and grants ([fc65fe0](https://github.com/netakalir/baby_tracker/commit/fc65fe09805a8b095d2af6ab3684343294a59f7c))
+* **db:** renumber events.created_by migration and keep practice-child rule ([2fd477c](https://github.com/netakalir/baby_tracker/commit/2fd477ce0ac81b0c2714e4aec5d2e9cbe1261186))
+* **today:** both parents starting/stopping the same timer at once ([a6b464d](https://github.com/netakalir/baby_tracker/commit/a6b464df14d69e9111dad691f63f71f2a532e635))
+* **today:** handle both parents starting/stopping the same timer at once ([e2657ea](https://github.com/netakalir/baby_tracker/commit/e2657ea97254837488df3689d2608199f2993d4a))
+* **today:** update the screen as soon as a log is saved ([ed88fed](https://github.com/netakalir/baby_tracker/commit/ed88fedc0c8e9b4f00a657b829a7fe1a02e07d1d))
+* **today:** update the screen as soon as a log is saved ([2366279](https://github.com/netakalir/baby_tracker/commit/2366279ecb6588d63c53b0c306c178667c026157))
+* **tour:** discard an abandoned tour's practice child by id ([b7a5755](https://github.com/netakalir/baby_tracker/commit/b7a57555c7fd99e7f21c79874c94b64c68f5c539))
+* **tour:** step back after an outside tap once saves settle ([c4c58a5](https://github.com/netakalir/baby_tracker/commit/c4c58a5945582674a73660240174c2269c431293))
+
 ## [0.2.0](https://github.com/netakalir/baby_tracker/compare/vite-scaffold-v0.1.0...vite-scaffold-v0.2.0) (2026-11-10)
 
 
