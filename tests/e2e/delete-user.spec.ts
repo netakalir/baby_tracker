@@ -33,8 +33,10 @@ async function deleteOwnAccount(client: SupabaseClient): Promise<void> {
 }
 
 async function expectAuthUserGone(userId: string): Promise<void> {
-  const { data } = await adminClient.auth.admin.getUserById(userId)
+  const { data, error } = await adminClient.auth.admin.getUserById(userId)
   expect(data.user).toBeNull()
+  // Any auth failure also yields a null user, so require a real "not found".
+  expect(error?.status).toBe(404)
 }
 
 async function insertRunningFeeding(client: SupabaseClient, childId: string): Promise<string> {
@@ -57,6 +59,21 @@ test.describe('delete-user Edge Function', () => {
     const clientA = await authedClient(parentA)
     const clientB = await authedClient(parentB)
     const runningTimerId = await insertRunningFeeding(clientB, family.childId)
+
+    // B also owns a practice child with an event. Deleting B reaches that event
+    // through two FK actions at once: the child CASCADE and created_by SET NULL.
+    const { data: practiceChild, error: practiceChildError } = await clientB
+      .from('children')
+      .insert({
+        family_id: family.familyId,
+        name: `Practice-${Date.now()}`,
+        birth_date: '2026-01-01',
+        demo_owner_id: parentB.id,
+      })
+      .select('id')
+      .single<{ id: string }>()
+    if (practiceChildError) throw practiceChildError
+    await insertRunningFeeding(clientB, practiceChild.id)
 
     await deleteOwnAccount(clientB)
     await expectAuthUserGone(parentB.id)
