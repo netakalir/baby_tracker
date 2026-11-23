@@ -4,10 +4,16 @@
 -- The bug: delete-user uses the service_role key and starts by reading
 -- the caller's family ids from family_members, so it can sweep orphaned
 -- families after the account is gone. No migration ever granted
--- service_role access to that table, so every call failed with
--- "permission denied for table family_members" and no account could be
--- deleted. The service_role key bypasses RLS, but RLS is checked only
--- after table privileges: it does not replace a missing GRANT.
+-- service_role access to that table, so the privilege depended on how
+-- each hosted project happened to be set up. The two projects drifted:
+-- on the test project every call failed with "permission denied for
+-- table family_members", while production already holds this privilege
+-- (checked with has_table_privilege on 2026-11-23). The service_role
+-- key bypasses RLS, but RLS is checked only after table privileges: it
+-- does not replace a missing GRANT.
+--
+-- This migration makes the requirement explicit in every environment.
+-- On production it is a no-op.
 --
 -- Fix: grant SELECT on family_members, and nothing else. That is the
 -- only direct table access the function performs:
