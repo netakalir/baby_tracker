@@ -53,30 +53,20 @@ export function overlapsWindowFilter(startIso: string): string {
   ].join(',')
 }
 
-/** Resolves the signed-in user's id, or throws if there is no session. */
-async function requireUserId(): Promise<string> {
-  const { data: userResult, error: userError } = await supabase.auth.getUser()
-  if (userError) throw userError
-
-  const userId = userResult.user?.id
-  if (!userId) {
-    throw new Error('Cannot log an event without an authenticated user')
-  }
-  return userId
-}
-
 /**
  * Logs an immediate event for a child: a single row with `start_time = now`
  * and no `end_time` (immediate events have no duration). RLS restricts the
  * insert to children in the caller's family.
+ *
+ * `created_by` is left to the column default (`auth.uid()`), so the database
+ * stamps the caller from their JWT. This also saves the extra auth round trip
+ * a client-side `getUser()` would cost on every tap.
  */
 export async function logImmediateEvent(
   childId: string,
   type: ImmediateEventType,
   metadata?: Record<string, unknown>,
 ): Promise<Event> {
-  const userId = await requireUserId()
-
   const { data, error } = await supabase
     .from('events')
     .insert({
@@ -84,7 +74,6 @@ export async function logImmediateEvent(
       type,
       start_time: new Date().toISOString(),
       end_time: null,
-      created_by: userId,
       metadata: metadata ?? null,
     })
     .select()
@@ -150,14 +139,13 @@ async function fetchRunningTimerEvent(
  * UI: two parents can tap "start" on two phones before either sees the other's
  * timer over Realtime. The second insert then fails with a unique violation,
  * and this tap adopts the timer that is already running instead of failing.
+ * As with {@link logImmediateEvent}, `created_by` comes from the column default.
  */
 export async function startTimerEvent(
   childId: string,
   type: TimerEventType,
   metadata?: Record<string, unknown>,
 ): Promise<StartTimerResult> {
-  const userId = await requireUserId()
-
   const { data, error } = await supabase
     .from('events')
     .insert({
@@ -165,7 +153,6 @@ export async function startTimerEvent(
       type,
       start_time: new Date().toISOString(),
       end_time: null,
-      created_by: userId,
       metadata: metadata ?? null,
     })
     .select()

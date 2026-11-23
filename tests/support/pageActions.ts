@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test'
+import type { Page, Route } from '@playwright/test'
 import { authStorageKey, cachedSession, signInThroughApi } from './authSessions'
 import type { TestUser } from './fixtures'
 
@@ -73,4 +73,47 @@ export type HeaderMenuItem = 'שבוע' | 'השוואת ימים' | 'הגדרו�
 export async function openFromHeaderMenu(page: Page, item: HeaderMenuItem): Promise<void> {
   await page.getByRole('button', { name: 'תפריט' }).click()
   await page.getByRole('menu', { name: 'תפריט' }).getByRole('menuitem', { name: item }).click()
+}
+
+/** Matches PostgREST requests on the `events` table. */
+const EVENTS_REST_URL = /\/rest\/v1\/events(\?|$)/
+
+/** A hold on the Today list's reads, from {@link holdTodayEventsReads}. */
+export interface TodayEventsHold {
+  /** How many reads are being held (or were, before the release). */
+  readonly heldCount: () => number
+  /** Lets every held read through, and all later ones. */
+  readonly release: () => Promise<void>
+}
+
+/**
+ * Holds the Today list's reads at the network, so a test can assert what the
+ * screen shows while a refetch is truly in flight, with no timing guesswork.
+ * Saves (POST/PATCH) and other reads of `events` pass through: the day-window
+ * read is the only one with PostgREST's `or` overlap filter.
+ */
+export async function holdTodayEventsReads(page: Page): Promise<TodayEventsHold> {
+  const heldRoutes: Route[] = []
+  let heldCount = 0
+  let isReleased = false
+
+  await page.route(EVENTS_REST_URL, async (route) => {
+    const request = route.request()
+    const isDayWindowRead =
+      request.method() === 'GET' && new URL(request.url()).searchParams.has('or')
+    if (isReleased || !isDayWindowRead) {
+      await route.fallback()
+      return
+    }
+    heldCount += 1
+    heldRoutes.push(route)
+  })
+
+  return {
+    heldCount: () => heldCount,
+    release: async () => {
+      isReleased = true
+      await Promise.all(heldRoutes.splice(0).map((route) => route.continue()))
+    },
+  }
 }

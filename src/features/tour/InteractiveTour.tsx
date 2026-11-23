@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query'
+import { useIsFetching, useIsMutating, useQueryClient } from '@tanstack/react-query'
 import { driver, type Driver, type DriveStep } from 'driver.js'
 import 'driver.js/dist/driver.css'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
@@ -143,9 +143,15 @@ export function InteractiveTour({ childId, events, onEnd }: InteractiveTourProps
     }
   }, [checkProgress])
 
+  // Re-checked when a save or refetch settles too: a menu closed by an outside
+  // tap while one was in flight changes neither the events nor the DOM afterwards,
+  // so nothing else would step the tour back.
+  const fetchingCount = useIsFetching({ queryKey: todayEventsKeyPrefix(childId) })
+  const mutatingCount = useIsMutating()
+
   useEffect(() => {
     checkProgress()
-  }, [events, checkProgress])
+  }, [events, fetchingCount, mutatingCount, checkProgress])
 
   return null
 }
