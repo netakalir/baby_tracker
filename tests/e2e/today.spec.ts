@@ -1,6 +1,6 @@
 import { deviceDayBounds } from '../../src/features/today/todayDate'
 import { expect, test } from '../support/fixtures'
-import { openFromHeaderMenu, signIn } from '../support/pageActions'
+import { holdTodayEventsReads, openFromHeaderMenu, signIn } from '../support/pageActions'
 
 test.describe('Today screen - quick logging', () => {
   test('an empty day shows the empty-state clock until an event is logged', async ({
@@ -64,6 +64,35 @@ test.describe('Today screen - quick logging', () => {
     await moodMenu.getByRole('menuitem', { name: 'שמח' }).click()
     await expect(page.getByRole('status')).toHaveText('נרשם מצב רוח')
     await expect(moodMenu).toBeHidden()
+    await expect(page.getByRole('img', { name: /מצב רוח בשעה/ })).toBeVisible()
+  })
+
+  test('a saved log appears on the clock while the refetch is still in flight', async ({
+    page,
+    factory,
+  }) => {
+    const user = await factory.createUser()
+    await factory.seedFamilyWithChild(user, { childName: 'תמר' })
+
+    await signIn(page, user)
+    await expect(page).toHaveURL(/\/today$/)
+
+    // A first log on the clock proves the day's list is in the cache: a save
+    // can only be written into a list that has already loaded.
+    await page.getByRole('button', { name: 'רישום החתלה' }).click()
+    await expect(page.getByRole('img', { name: /החתלה בשעה/ })).toBeVisible()
+
+    const hold = await holdTodayEventsReads(page)
+
+    await page.getByRole('button', { name: 'רישום מצב רוח' }).click()
+    await page.getByRole('menu', { name: 'בחירת מצב רוח' }).getByRole('menuitem', { name: 'שמח' }).click()
+
+    // The refetch was sent and is held, so only the cache write can draw this.
+    await expect.poll(hold.heldCount).toBeGreaterThan(0)
+    await expect(page.getByRole('img', { name: /מצב רוח בשעה/ })).toBeVisible()
+
+    // The reconciling refetch then keeps the event.
+    await hold.release()
     await expect(page.getByRole('img', { name: /מצב רוח בשעה/ })).toBeVisible()
   })
 })

@@ -82,6 +82,13 @@ export interface Child {
    * Not applied to the clock yet (deferred "apply" layer).
    */
   day_start: string
+  /**
+   * Non-null only for the app tour's temporary practice child: the user who owns
+   * it. RLS hides a practice child (and its events) from everyone else, and it
+   * can never turn into a real child or change owner. Real children are null,
+   * and every normal child query filters them with `.is('demo_owner_id', null)`.
+   */
+  demo_owner_id: string | null
   created_at: string
 }
 

@@ -8,6 +8,7 @@ import { FormError } from '../../components/ui/FormError'
 import { Input } from '../../components/ui/Input'
 import { Label } from '../../components/ui/Label'
 import { useAuth } from '../auth/useAuth'
+import { requestTourOnArrival } from '../tour/tourStart'
 import { useOnboardingStatus } from './useOnboardingStatus'
 import { addChild } from './api'
 import { addChildSchema } from './schemas'
@@ -30,6 +31,9 @@ export function AddChildScreen() {
     mutationFn: (input: { name: string; birthDate: string }) =>
       addChild(onboardingState!.familyId!, input),
     onSuccess: async () => {
+      // First arrival on Today: start the app tour once (see tourStart). Raised
+      // before the refetch, which can itself redirect to Today via the guard.
+      requestTourOnArrival()
       await queryClient.invalidateQueries({ queryKey: ['onboarding-status', user!.id] })
       navigate('/today')
     },

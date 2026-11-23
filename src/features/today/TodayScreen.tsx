@@ -4,6 +4,9 @@ import { Banner } from '../../components/ui/Banner'
 import { LoadingScreen } from '../../components/ui/LoadingScreen'
 import { toFriendlyDbErrorMessage } from '../../lib/errorMessages'
 import { useOnboardingStatus } from '../onboarding/useOnboardingStatus'
+import { InteractiveTour } from '../tour/InteractiveTour'
+import { tourAnchor } from '../tour/tourSteps'
+import { usePracticeTour } from '../tour/usePracticeTour'
 import { WeatherStrip } from '../weather/WeatherStrip'
 import { isRunningTimerEvent } from './api'
 import { ClockLegend } from './ClockLegend'
@@ -31,13 +34,15 @@ interface TodayHeaderProps {
   onOpenWeek: () => void
   onOpenCompare: () => void
   onOpenSettings: () => void
+  onStartTour: () => void
 }
 
 /**
  * Top app bar: the date on the start side, and a child "pill" (avatar + name) on
  * the end side - the entry point for the multi-child switcher (a later slice, so
  * for now it is a static identity). A single menu button at the edge opens the
- * navigation to the Week screen, Day comparison and the Settings hub.
+ * navigation to the Week screen, Day comparison, the Settings hub and the app
+ * tour.
  *
  * Fits down to 320px without horizontal overflow. The date truncates first:
  * it takes only the space the pill and menu button leave, with an ellipsis. The
@@ -51,6 +56,7 @@ const TodayHeader = memo(function TodayHeader({
   onOpenWeek,
   onOpenCompare,
   onOpenSettings,
+  onStartTour,
 }: TodayHeaderProps) {
   return (
     <header className="flex items-center justify-between gap-3">
@@ -73,11 +79,14 @@ const TodayHeader = memo(function TodayHeader({
           </span>
         </div>
 
-        <HeaderMenu
-          onOpenWeek={onOpenWeek}
-          onOpenCompare={onOpenCompare}
-          onOpenSettings={onOpenSettings}
-        />
+        <div {...tourAnchor('menu')} className="shrink-0">
+          <HeaderMenu
+            onOpenWeek={onOpenWeek}
+            onOpenCompare={onOpenCompare}
+            onOpenSettings={onOpenSettings}
+            onStartTour={onStartTour}
+          />
+        </div>
       </div>
     </header>
   )
@@ -91,6 +100,14 @@ interface TodayContentProps {
   onOpenWeek: () => void
   onOpenCompare: () => void
   onOpenSettings: () => void
+  onStartTour: () => void
+  /** True when the last attempt to start the app tour failed. */
+  hasTourStartFailed: boolean
+  /**
+   * Set while the interactive tour runs: the shown child is then the practice
+   * child, and this ends the tour (finished, skipped or closed).
+   */
+  onEndTour: (() => void) | null
 }
 
 /**
@@ -98,6 +115,10 @@ interface TodayContentProps {
  * (live view only - never on a historical day), the 24-hour clock (hero)
  * fed by the child's events, a color legend, the estimate rows, and the sticky
  * quick-log bar. Split out so `useTodayEvents` only mounts once we have a child.
+ *
+ * While the app tour runs it shows the practice child - the same screen, the
+ * same queries, real saves - with a "practice" banner, and hosts the tour, which
+ * waits on this child's events.
  */
 function TodayContent({
   childId,
@@ -106,6 +127,9 @@ function TodayContent({
   onOpenWeek,
   onOpenCompare,
   onOpenSettings,
+  onStartTour,
+  hasTourStartFailed,
+  onEndTour,
 }: TodayContentProps) {
   const today = new Date()
   const displayUnit = useDisplayUnit()
@@ -126,12 +150,25 @@ function TodayContent({
 
   return (
     <>
+      {onEndTour && (
+        <p className="mb-3 rounded-full bg-brand-50 px-4 py-2 text-center text-sm font-medium text-brand-700">
+          מצב תרגול · מה שנרשם עכשיו יימחק בסוף הסיור
+        </p>
+      )}
+
       <TodayHeader
         childName={childName}
         onOpenWeek={onOpenWeek}
         onOpenCompare={onOpenCompare}
         onOpenSettings={onOpenSettings}
+        onStartTour={onStartTour}
       />
+
+      {hasTourStartFailed && (
+        <div className="mt-4">
+          <Banner message="לא הצלחנו להתחיל את הסיור. נסו שוב בעוד רגע." variant="error" />
+        </div>
+      )}
 
       <div className="mt-3">
         <WeatherStrip />
@@ -143,7 +180,7 @@ function TodayContent({
         </div>
       )}
 
-      <section className="mt-6 flex flex-col items-center gap-4">
+      <section {...tourAnchor('clock')} className="mt-6 flex flex-col items-center gap-4">
         <DayClock
           events={events ?? []}
           date={today}
@@ -154,11 +191,13 @@ function TodayContent({
         <ClockLegend />
       </section>
 
-      <div className="mt-6">
+      <div {...tourAnchor('estimates')} className="mt-6">
         <EstimateBanners childId={childId} dayStart={dayStart} />
       </div>
 
-      <QuickLogButtons childId={childId} events={events ?? []} now={now} />
+      <QuickLogButtons childId={childId} dayStart={dayStart} events={events ?? []} now={now} />
+
+      {onEndTour && <InteractiveTour childId={childId} events={events ?? []} onEnd={onEndTour} />}
     </>
   )
 }
@@ -167,16 +206,21 @@ export function TodayScreen() {
   const { data: onboardingState } = useOnboardingStatus()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const tour = usePracticeTour(onboardingState?.firstChild ?? null)
 
   if (!onboardingState) return <LoadingScreen />
 
-  const child = onboardingState.firstChild
+  const realChild = onboardingState.firstChild
+  // While the tour runs, the screen shows the practice child instead.
+  const child = tour.practiceChild ?? realChild
 
   // A `date=YYYY-MM-DD` param opens a past day read-only; anything invalid,
-  // today, future or pre-creation falls back to the live view (spec §9.1).
-  const mode = child
-    ? resolveTodayMode(searchParams.get('date'), child.day_start, child.created_at)
-    : { kind: 'live' as const }
+  // today, future or pre-creation falls back to the live view (spec §9.1). The
+  // tour always runs on the live view.
+  const mode =
+    child && !tour.practiceChild
+      ? resolveTodayMode(searchParams.get('date'), child.day_start, child.created_at)
+      : { kind: 'live' as const }
 
   return (
     <div className="min-h-screen bg-neutral-50 px-5 pb-40 pt-6">
@@ -192,12 +236,18 @@ export function TodayScreen() {
             />
           ) : (
             <TodayContent
+              // A fresh mount per child: switching to and from the practice
+              // child never carries over local state (open menus, toasts).
+              key={child.id}
               childId={child.id}
               childName={child.name}
               dayStart={child.day_start}
               onOpenWeek={() => navigate('/week')}
               onOpenCompare={() => navigate('/compare')}
               onOpenSettings={() => navigate('/settings')}
+              onStartTour={tour.start}
+              hasTourStartFailed={tour.hasStartFailed}
+              onEndTour={tour.practiceChild ? tour.end : null}
             />
           )
         ) : (
