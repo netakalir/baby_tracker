@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/netakalir/baby_tracker/compare/vite-scaffold-v0.2.0...vite-scaffold-v0.3.0) (2026-11-23)
+
+
+### Features
+
+* **tour:** interactive app tour on a practice child ([2279489](https://github.com/netakalir/baby_tracker/commit/2279489081521574578b2246d43f7cacda86f0b1))
+
+
+### Bug Fixes
+
+* **db:** enforce events.created_by authorship in RLS and grants ([e296243](https://github.com/netakalir/baby_tracker/commit/e296243b346197184f2eb3532b61e01a47d1974a))
+* **today:** handle both parents starting/stopping the same timer at once ([a6b464d](https://github.com/netakalir/baby_tracker/commit/a6b464df14d69e9111dad691f63f71f2a532e635))
+* **today:** update the screen as soon as a log is saved ([ed88fed](https://github.com/netakalir/baby_tracker/commit/ed88fedc0c8e9b4f00a657b829a7fe1a02e07d1d))
+
 ## [0.2.0](https://github.com/netakalir/baby_tracker/compare/vite-scaffold-v0.1.0...vite-scaffold-v0.2.0) (2026-11-10)
 
 
