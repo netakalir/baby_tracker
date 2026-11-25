@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/netakalir/baby_tracker/compare/vite-scaffold-v0.3.0...vite-scaffold-v0.3.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **db:** let delete-user read family memberships ([bf3678e](https://github.com/netakalir/baby_tracker/commit/bf3678e64481b6fc40a14d9476cdee6f9a5da3e7))
+
 ## [0.3.0](https://github.com/netakalir/baby_tracker/compare/vite-scaffold-v0.2.0...vite-scaffold-v0.3.0) (2026-11-23)
 
 
